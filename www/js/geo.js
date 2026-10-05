@@ -56,6 +56,12 @@
     if (!m) throw new Error("bad cf trace");
     return { ip: m[1].trim(), text: "-" };
   }
+  // ipapi.co（https）
+  async function fromIpapiCo() {
+    const d = await fetchJSON("https://ipapi.co/json/");
+    if (!d || !d.ip) throw new Error("bad ipapi.co");
+    return { ip: d.ip, text: (d.city || "") + ", " + (d.org || "") };
+  }
 
   const PROVIDERS = [fromQifu, fromIpApi, fromIpSb, fromIpwhoIs, fromFreeIpApi, fromIpapiCo, fromCfTrace];
 
