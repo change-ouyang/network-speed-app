@@ -28,6 +28,7 @@
       this._offsets = [];
       this._window = [];        // [{t, bytes}] 滚动速率窗口
       this._sizeKnown = 0;      // 从 Content-Range 学到的文件大小
+      this._rangeMode = null;   // null=未探测 true=分块 false=整包
       this._onTick = null;
       this._onStop = null;
       this._onError = null;
@@ -58,9 +59,18 @@
         .then(async (resp) => {
           if (!resp.ok && resp.status !== 206) throw new Error("HTTP " + resp.status);
           const cr = resp.headers.get("content-range");
-          if (cr) {
-            const m = /\/(\d+)$/.exec(cr);
-            if (m) this._sizeKnown = parseInt(m[1], 10) || 0;
+          if (resp.status === 206) {
+            // 服务器支持 Range：进入分块模式（浏览器下 Content-Range 可能被 CORS 隐藏，仅按状态判断）
+            this._rangeMode = true;
+            if (cr) {
+              const m = /\/(\d+)$/.exec(cr);
+              if (m) {
+                this._sizeKnown = parseInt(m[1], 10) || 0;
+                if (this._sizeKnown > 0 && this._sizeKnown <= CHUNK) this._rangeMode = false; // 小文件整包即可
+              }
+            }
+          } else if (resp.status === 200) {
+            this._rangeMode = false; // 服务器忽略 Range
           }
           const buf = await resp.arrayBuffer();
           return buf.byteLength;
@@ -86,9 +96,16 @@
         if (!this.running) break;
 
         let off = null;
-        if (this._sizeKnown > CHUNK) {
-          off = this._offsets[id] || 0;
-          this._offsets[id] = (off + CHUNK * this.threads) % this._sizeKnown;
+        if (this._rangeMode !== false) {
+          if (this._sizeKnown > CHUNK) {
+            // 已知大小：线程间轮流取块，避免重复下载同一段
+            off = this._offsets[id] || 0;
+            this._offsets[id] = (off + CHUNK * this.threads) % this._sizeKnown;
+          } else {
+            // 未知大小：按线程步进取块，越界(416)后回卷
+            off = this._offsets[id] || 0;
+            this._offsets[id] = off + CHUNK * this.threads;
+          }
         }
         try {
           const n = await this._fetch(this.url, off);
@@ -100,6 +117,10 @@
           }
         } catch (e) {
           if (!this.running) break;
+          if (e && e.message === "HTTP 416" && off != null) {
+            this._offsets[id] = 0; // 超出文件末尾，回卷从头继续
+            continue;
+          }
           this._consecFail++;
           const msg = e && e.message ? e.message : String(e);
           if (this._onError) this._onError({ msg, consecutive: this._consecFail });
@@ -147,6 +168,7 @@
       this.threads = threads;
       this.running = true;
       this._sizeKnown = 0;
+      this._rangeMode = null;
       this._offsets = new Array(threads).fill(0);
       // 连续测试：不清零 totalBytes（对齐原站“总使用量”跨启动累计），仅重置速率窗口
       if (!this.sessionStart) this.sessionStart = Date.now();
@@ -160,7 +182,7 @@
       }
     }
 
-    setUrl(url) { this.url = url; this._sizeKnown = 0; this._offsets = this._offsets.map(() => 0); }    setThreads(n) {
+    setUrl(url) { this.url = url; this._sizeKnown = 0; this._rangeMode = null; this._offsets = this._offsets.map(() => 0); }    setThreads(n) {
       n = Math.max(1, Math.min(32, n | 0));
       if (!this.running) { this.threads = n; return; }
       while (this.threads < n) { const id = this.threads++; this._offsets[id] = 0; this._workers.push(this._worker(id).catch(() => {})); }
