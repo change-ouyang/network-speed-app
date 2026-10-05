@@ -118,17 +118,22 @@
   function persistPeak() {
     if (engine.peakSpeed > Store.getMaxSpeed()) Store.set(Store.K.maxSpeed, Math.round(engine.peakSpeed));
   }
-  engine.on("tick", (e) => {
+  function renderMetrics(e) {
     $("mUsed").textContent = window.formatBytes(e.totalBytes, 1);
     $("mSpeedLabel").textContent = e.running ? "实时速度" : "平均速度";
-    $("mSpeed").textContent = e.running || e.avgSpeed > 0 ? window.formatBytes(e.running ? e.speed : e.avgSpeed, 0) : "-";
+    const shown = e.running ? e.speed : e.avgSpeed;
+    $("mSpeed").textContent = (e.running || e.avgSpeed > 0) ? window.formatBytes(shown, 0) : "-";
     const mbps = e.peakSpeed * 8 / 1e6;
     $("mBand").textContent = (mbps >= 100 ? Math.round(mbps) : mbps.toFixed(1)) + " Mbps";
     $("bandBar").style.width = Math.min(100, mbps / 500 * 100).toFixed(1) + "%";
+  }
+  engine.on("tick", (e) => {
+    renderMetrics(e);
     persistPeak();
   });
   engine.on("stop", (reason) => {
     if (reason === "reachMaxUse") toast("已达到用量上限，自动停止");
+    renderMetrics({ ...engine, running: false });
     refreshPlayUI();
     releaseWakeLock();
   });
@@ -149,6 +154,9 @@
     }
   });
   engine.on("recover", () => {}); // 成功请求会把失败计数清零，无需打扰
+  engine.on("stall", () => {
+    toast("节点响应缓慢或已限流，正在等待恢复…", 3000);
+  });
 
   function refreshPlayUI() {
     $("icPlay").style.display = engine.running ? "none" : "";

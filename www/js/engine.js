@@ -6,7 +6,7 @@
 
   const CHUNK = 2 * 1024 * 1024; // 单请求分块大小
   const TICK = 1000;             // 速率统计周期 ms
-  const TIMEOUT = 30000;         // 单请求超时保护
+  const TIMEOUT = 15000;         // 单请求超时保护
 
   class SpeedEngine {
     constructor() {
@@ -32,7 +32,11 @@
       this._onStop = null;
       this._onError = null;
       this._onRecover = null;
+      this._onStall = null;
       this._consecFail = 0;     // 全局连续失败计数（供 UI 决定是否打扰用户）
+      this._lastProgressBytes = 0;
+      this._lastProgressAt = 0;
+      this._wasStalled = false;
     }
 
     on(evt, cb) {
@@ -40,6 +44,7 @@
       if (evt === "stop") this._onStop = cb;
       if (evt === "error") this._onError = cb;
       if (evt === "recover") this._onRecover = cb;
+      if (evt === "stall") this._onStall = cb;
     }
 
     _fetch(url, rangeStart) {
@@ -107,6 +112,15 @@
 
     _tick() {
       const now = Date.now();
+      // 停滞检测：运行中超过 8 秒没有任何新字节则通知 UI（节点限流/挂起）
+      if (this.totalBytes !== this._lastProgressBytes) {
+        this._lastProgressBytes = this.totalBytes;
+        this._lastProgressAt = now;
+        if (this._wasStalled) { this._wasStalled = false; if (this._onRecover) this._onRecover(); }
+      } else if (now - this._lastProgressAt > 8000 && !this._wasStalled) {
+        this._wasStalled = true;
+        if (this._onStall) this._onStall();
+      }
       this._window.push({ t: now, b: this.totalBytes });
       while (this._window.length > 1 && now - this._window[0].t > 3000) this._window.shift();
       const first = this._window[0];
@@ -137,6 +151,9 @@
       // 连续测试：不清零 totalBytes（对齐原站“总使用量”跨启动累计），仅重置速率窗口
       if (!this.sessionStart) this.sessionStart = Date.now();
       this._window = [{ t: Date.now(), b: this.totalBytes }];
+      this._lastProgressBytes = this.totalBytes;
+      this._lastProgressAt = Date.now();
+      this._wasStalled = false;
       this._timer = setInterval(() => this._tick(), TICK);
       for (let i = 0; i < threads; i++) {
         this._workers.push(this._worker(i).catch(() => {}));
