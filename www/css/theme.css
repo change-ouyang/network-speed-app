@@ -40,7 +40,7 @@ html { scrollbar-width: none; }
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) calc(env(safe-area-inset-right, 0px) + 16px) 10px calc(env(safe-area-inset-left, 0px) + 16px);
   background: rgba(0,0,0,.92);
   color: #fff;
   position: sticky; top: 0; z-index: 10;
@@ -59,7 +59,7 @@ html { scrollbar-width: none; }
   border-radius: 16px; padding: 5px 14px; font-size: .9rem;
 }
 
-.page { max-width: 640px; margin: 0 auto; padding: 14px 14px 30px; }
+.page { max-width: 640px; margin: 0 auto; padding: 14px calc(env(safe-area-inset-right, 0px) + 14px) calc(env(safe-area-inset-bottom, 0px) + 30px); }
 .card {
   background: var(--card); border-radius: var(--radius);
   padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
