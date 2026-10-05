@@ -6,6 +6,7 @@
 
   const CHUNK = 2 * 1024 * 1024; // 单请求分块大小
   const TICK = 1000;             // 速率统计周期 ms
+  const TIMEOUT = 30000;         // 单请求超时保护
 
   class SpeedEngine {
     constructor() {
@@ -30,12 +31,15 @@
       this._onTick = null;
       this._onStop = null;
       this._onError = null;
+      this._onRecover = null;
+      this._consecFail = 0;     // 全局连续失败计数（供 UI 决定是否打扰用户）
     }
 
     on(evt, cb) {
       if (evt === "tick") this._onTick = cb;
       if (evt === "stop") this._onStop = cb;
       if (evt === "error") this._onError = cb;
+      if (evt === "recover") this._onRecover = cb;
     }
 
     _fetch(url, rangeStart) {
@@ -43,16 +47,24 @@
       const headers = {};
       if (rangeStart != null) headers.range = "bytes=" + rangeStart + "-" + (rangeStart + CHUNK - 1);
       // CapacitorHttp 启用时 fetch 走原生 OkHttp（无 CORS）；纯浏览器环境退化为常规 fetch
-      return fetch(url, { headers, cache: "no-store" }).then(async (resp) => {
-        if (!resp.ok && resp.status !== 206) throw new Error("HTTP " + resp.status);
-        const cr = resp.headers.get("content-range");
-        if (cr) {
-          const m = /\/(\d+)$/.exec(cr);
-          if (m) this._sizeKnown = parseInt(m[1], 10) || 0;
-        }
-        const buf = await resp.arrayBuffer();
-        return buf.byteLength;
-      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
+      return fetch(url, { headers, cache: "no-store", signal: ctrl.signal })
+        .then(async (resp) => {
+          if (!resp.ok && resp.status !== 206) throw new Error("HTTP " + resp.status);
+          const cr = resp.headers.get("content-range");
+          if (cr) {
+            const m = /\/(\d+)$/.exec(cr);
+            if (m) this._sizeKnown = parseInt(m[1], 10) || 0;
+          }
+          const buf = await resp.arrayBuffer();
+          return buf.byteLength;
+        })
+        .catch((e) => {
+          if (e && e.name === "AbortError") throw new Error("请求超时");
+          throw e;
+        })
+        .finally(() => clearTimeout(timer));
     }
 
     async _worker(id) {
@@ -77,9 +89,18 @@
           const n = await this._fetch(this.url, off);
           if (!this.running) break;
           this.totalBytes += n;
+          if (this._consecFail > 0) {
+            this._consecFail = 0;
+            if (this._onRecover) this._onRecover();
+          }
         } catch (e) {
-          if (this._onError) this._onError(e && e.message ? e.message : String(e));
-          await new Promise(r => setTimeout(r, 1500)); // 出错退避后重试
+          if (!this.running) break;
+          this._consecFail++;
+          const msg = e && e.message ? e.message : String(e);
+          if (this._onError) this._onError({ msg, consecutive: this._consecFail });
+          // 指数退避 + 抖动：连续失败越多等得越久，避免火上浇油
+          const backoff = Math.min(6000, 1200 * Math.pow(2, Math.min(3, this._consecFail)));
+          await new Promise(r => setTimeout(r, backoff * (0.7 + Math.random() * 0.6)));
         }
       }
     }

@@ -132,11 +132,23 @@
     refreshPlayUI();
     releaseWakeLock();
   });
-  let errToastAt = 0;
-  engine.on("error", (msg) => {
+  let lastWarnToast = 0, lastInfoToast = 0;
+  engine.on("error", (e) => {
+    console.warn("[speedtest]", e.msg, "consecutive:", e.consecutive);
     const now = Date.now();
-    if (now - errToastAt > 4000) { errToastAt = now; toast("测试请求失败：" + msg); }
+    if (e.consecutive >= 3) {
+      // 连续失败：说明不是偶发抖动，明确提示且降低打扰频率
+      if (now - lastWarnToast > 15000) {
+        lastWarnToast = now;
+        toast("节点连接不稳定，已自动重试；建议降低线程数或更换节点", 3200);
+      }
+    } else if (now - lastInfoToast > 30000) {
+      // 偶发失败：静默重试即可，最多轻描淡写提一次
+      lastInfoToast = now;
+      toast("个别请求失败，已自动重试", 1800);
+    }
   });
+  engine.on("recover", () => {}); // 成功请求会把失败计数清零，无需打扰
 
   function refreshPlayUI() {
     $("icPlay").style.display = engine.running ? "none" : "";
