@@ -381,7 +381,7 @@
   }
 
   // ---------- IP 卡 ----------
-  async function loadGeo(force) {
+  async function loadGeo(force, depth) {
     try {
       const info = await window.Geo.query(force);
       $("ipAddr").textContent = info.ip;
@@ -389,6 +389,9 @@
     } catch (e) {
       $("ipAddr").textContent = "获取失败";
       $("ipGeo").textContent = "点击重试";
+      // 首次加载失败自动再试两轮（换接口/网络抖动），不打扰用户
+      const d = depth || 0;
+      if (!force && d < 2) setTimeout(() => loadGeo(false, d + 1), 5000 * (d + 1));
     }
   }
   $("ipCard").addEventListener("click", () => loadGeo(true));
