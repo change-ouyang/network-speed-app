@@ -35,20 +35,29 @@
     if (!d || !d.ip) throw new Error("bad ip.sb");
     return { ip: d.ip, text: (d.city || d.country || "") + ", " + (d.isp || d.organization || "") };
   }
+  // ipwho.is：对数据中心 IP 较宽容，含 ISP
+  async function fromIpwhoIs() {
+    const d = await fetchJSON("https://ipwho.is/");
+    if (!d || !d.ip || d.success === false) throw new Error("bad ipwho.is");
+    return { ip: d.ip, text: (d.city || d.country || "") + ", " + ((d.connection && d.connection.isp) || "") };
+  }
   // freeipapi：无 ISP，兜底只出 IP 与城市
   async function fromFreeIpApi() {
     const d = await fetchJSON("https://freeipapi.com/api/json");
     if (!d || !d.ipAddress) throw new Error("bad freeipapi");
     return { ip: d.ipAddress, text: (d.cityName || d.regionName || "") + ", -" };
   }
-  // ipapi.co
-  async function fromIpapiCo() {
-    const d = await fetchJSON("https://ipapi.co/json/");
-    if (!d || !d.ip) throw new Error("bad ipapi.co");
-    return { ip: d.ip, text: (d.city || "") + ", " + (d.org || "") };
+  // Cloudflare trace：最后兜底，只有 IP
+  async function fromCfTrace() {
+    const r = await fetch("https://1.1.1.1/cdn-cgi/trace", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const txt = await r.text();
+    const m = /^ip=(.+)$/m.exec(txt);
+    if (!m) throw new Error("bad cf trace");
+    return { ip: m[1].trim(), text: "-" };
   }
 
-  const PROVIDERS = [fromQifu, fromIpApi, fromIpSb, fromFreeIpApi, fromIpapiCo];
+  const PROVIDERS = [fromQifu, fromIpApi, fromIpSb, fromIpwhoIs, fromFreeIpApi, fromIpapiCo, fromCfTrace];
 
   window.Geo = {
     async query(force) {
