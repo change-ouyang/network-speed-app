@@ -1,0 +1,18 @@
+{
+  "name": "network-speed-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "网络速度：安卓端测速 App（Capacitor WebView 壳，复刻 270666.xyz 网络速度自查）",
+  "scripts": {
+    "cap:sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

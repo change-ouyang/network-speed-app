@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="color-scheme" content="light dark">
+  <title>网络速度</title>
+  <link rel="stylesheet" href="css/theme.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4a8 8 0 0 0-8 8c0 1.5.4 2.9 1.1 4.1l-1.5 1.5A10 10 0 1 1 12 2a10 10 0 0 1 8.4 4.6l-1.5 1.5A8 8 0 0 0 12 4z" fill="#fff" opacity=".9"/><path d="M12 6a6 6 0 0 0-6 6c0 1.2.3 2.3.9 3.2l7.8-7.8A6 6 0 0 0 12 6z" fill="#fff"/><path d="M14.3 9.7 20 4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <span class="brand-name">网络速度</span>
+    </div>
+    <button class="ghost-btn" id="btnAbout">说明</button>
+  </header>
+
+  <main class="page">
+    <section class="card">
+      <div class="addr-head">
+        <span class="addr-label">测试地址：</span>
+        <button class="icon-btn" id="btnCopyUrl" title="复制当前测试链接">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor"/></svg>
+        </button>
+        <button class="icon-btn" id="btnCustom" title="自定义地址">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <div class="select" id="sel">
+        <div class="select-trigger">
+          <svg viewBox="0 0 24 24" width="14" height="14" class="link-ic"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 1 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z" fill="currentColor"/></svg>
+          <span id="selLabel">微软商店</span>
+          <svg class="arrow" viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
+        </div>
+        <div class="select-panel" id="selPanel"></div>
+      </div>
+
+      <div class="thread-row">
+        <span class="thread-label">线程数：<b id="threadNum">8</b></span>
+        <input type="range" id="threadSlider" min="1" max="32" step="1" value="8">
+      </div>
+
+      <div class="switch-row">
+        <label class="switch-wrap">
+          <input type="checkbox" id="swKeepBg">
+          <span class="switch-ui"></span>
+          <span>保持后台运行</span>
+        </label>
+        <label class="switch-wrap">
+          <input type="checkbox" id="swAuto">
+          <span class="switch-ui"></span>
+          <span>自动运行</span>
+        </label>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-head"><span>总使用量</span><button class="icon-btn sm" id="btnMaxUse" title="设置用量上限"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
+          <div class="metric-val" id="mUsed">0 B</div>
+          <svg class="metric-ic" viewBox="0 0 24 24" width="22" height="22"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14a6 6 0 0 0 6 6h13a5 5 0 0 0 .35-9.96zM19 18H6a4 4 0 0 1-4-4 4 4 0 0 1 3.13-3.9l1.25-.28.65-1.1A5.49 5.49 0 0 1 12 6a5.49 5.49 0 0 1 4.97 3.22l.65 1.1 1.25.28A4 4 0 0 1 19 18z" fill="currentColor"/></svg>
+        </div>
+        <div class="metric">
+          <div class="metric-head"><span id="mSpeedLabel">平均速度</span><button class="icon-btn sm" id="btnPredict" title="用量预测"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h2v-2H7v2zm0-4h2V7H7v2zm-4 8h2v-2H3v2zm12-4h2v-2h-2v2zm4-4h2V7h-2v2zm0 4h2v-2h-2v2zm0 4h2v-2h-2v2zm-8 0h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm-4 0h2V7H7v2z" fill="currentColor"/></svg></button></div>
+          <div class="metric-val accent" id="mSpeed">-</div>
+          <svg class="metric-ic" viewBox="0 0 24 24" width="22" height="22"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 1 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z" fill="currentColor"/></svg>
+        </div>
+        <div class="metric">
+          <div class="metric-head"><span>网络带宽</span><button class="icon-btn sm" id="btnLimit" title="限速设置"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
+          <div class="metric-val" id="mBand">0 Mbps</div>
+          <div class="band-bar"><i id="bandBar"></i></div>
+          <svg class="metric-ic bolt" viewBox="0 0 24 24" width="22" height="22"><path d="M7 2v11h3v9l7-12h-4l4-8z" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <div class="play-zone">
+        <button class="play-btn" id="btnPlay" aria-label="开始/暂停">
+          <svg id="icPlay" viewBox="0 0 24 24" width="52" height="52"><path d="M8 5v14l11-7z" fill="#fff"/></svg>
+          <svg id="icPause" viewBox="0 0 24 24" width="44" height="44" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z" fill="#fff"/></svg>
+        </button>
+        <button class="icon-btn expand" id="btnChart" title="全屏图表">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="ip-card" id="ipCard">
+      <div class="ip-addr" id="ipAddr">查询中…</div>
+      <div class="ip-geo" id="ipGeo">-</div>
+    </section>
+
+    <p class="disclaimer">本测试工具仅提供网络速度自查，请勿用于非法用途，使用本工具造成的一切后果由用户承担！</p>
+  </main>
+
+  <!-- 全屏图表 -->
+  <div class="chart-overlay" id="chartOverlay">
+    <div class="chart-head">
+      <span>实时速率</span>
+      <span class="chart-now" id="chartNow">-</span>
+      <button class="icon-btn" id="btnChartClose"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
+    </div>
+    <canvas id="chartCanvas"></canvas>
+  </div>
+
+  <!-- 通用弹窗 -->
+  <div class="modal-mask" id="modalMask">
+    <div class="modal" id="modal">
+      <div class="modal-title" id="modalTitle"></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/nodes.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/geo.js"></script>
+  <script src="vendor/qrcode.min.js"></script>
+  <script src="vendor/html2canvas.min.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

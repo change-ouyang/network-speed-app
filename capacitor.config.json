@@ -1,0 +1,13 @@
+{
+  "appId": "com.ouyang.speedcheck",
+  "appName": "网络速度",
+  "webDir": "www",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
