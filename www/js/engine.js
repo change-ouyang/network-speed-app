@@ -206,6 +206,14 @@
       this.history = [];
     }
 
+    // 回到前台时调用：丢弃后台期间的时间窗，避免速率计算被拉低/跳变
+    resetRateWindow() {
+      this._window = [{ t: Date.now(), b: this.totalBytes }];
+      this._lastProgressBytes = this.totalBytes;
+      this._lastProgressAt = Date.now();
+      this._wasStalled = false;
+    }
+
     // 用量预测：按当前实时速度外推
     predict() {
       const p = this.speed;

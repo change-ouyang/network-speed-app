@@ -5,7 +5,6 @@
   const $ = (id) => document.getElementById(id);
   const engine = new window.SpeedEngine();
   let currentNode = null;   // {label, value}
-  let wakeLock = null;
 
   // ---------- 通用 ----------
   let toastTimer = null;
@@ -98,20 +97,17 @@
   $("swAuto").checked = Store.getAutoStart();
   $("swKeepBg").addEventListener("change", (e) => {
     Store.set(Store.K.keepBg, e.target.checked);
-    if (e.target.checked && engine.running) requestWakeLock(); else releaseWakeLock();
+    syncBgService();
   });
   $("swAuto").addEventListener("change", (e) => Store.set(Store.K.autoStart, e.target.checked));
 
-  async function requestWakeLock() {
-    try {
-      if ("wakeLock" in navigator && navigator.wakeLock.request) {
-        wakeLock = await navigator.wakeLock.request("screen");
-        wakeLock.addEventListener("release", () => { wakeLock = null; });
-      }
-    } catch (e) {}
-  }
-  function releaseWakeLock() {
-    try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+  // 后台运行 = 前台服务（测试中且开关开启时挂常驻服务，其余时候停掉）
+  function syncBgService() {
+    if (engine.running && Store.getKeepBg()) {
+      window.SpeedNative.bgEnable();
+    } else {
+      window.SpeedNative.bgDisable();
+    }
   }
 
   // ---------- 指标刷新 ----------
@@ -135,7 +131,7 @@
     if (reason === "reachMaxUse") toast("已达到用量上限，自动停止");
     renderMetrics({ ...engine, running: false });
     refreshPlayUI();
-    releaseWakeLock();
+    syncBgService();
   });
   let lastWarnToast = 0, lastInfoToast = 0;
   engine.on("error", (e) => {
@@ -166,16 +162,16 @@
     }
   }
 
-  $("btnPlay").addEventListener("click", async () => {
+  $("btnPlay").addEventListener("click", () => {
     if (!currentNode) { toast("请先选择测试地址"); return; }
     if (engine.running) {
       engine.stop();
       refreshPlayUI();
-      releaseWakeLock();
+      syncBgService();
     } else {
-      if (Store.getKeepBg()) await requestWakeLock();
       engine.start(currentNode.value, Store.getThreadNum());
       refreshPlayUI();
+      syncBgService();
     }
   });
 
@@ -308,9 +304,10 @@
     openModal("使用说明",
       "<p><b>关于本页</b></p>" +
       "<p>1、本应用为「网络速度」安卓端，与网页版功能保持一致：多线程循环下载真实公开文件测速，实时显示总使用量、速度与带宽峰值；</p>" +
-      "<p>2、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
-      "<p>3、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
-      "<p>4、App 端通过原生网络栈直连，无浏览器跨域与混合内容限制。</p>",
+      "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；部分国产 ROM 需在系统设置中允许本应用「后台运行/自启动」并把省电策略设为无限制；</p>" +
+      "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
+      "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
+      "<p>5、App 端通过原生网络栈直连，无浏览器跨域与混合内容限制。</p>",
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
 
@@ -425,10 +422,18 @@
       if (currentNode && !engine.running) {
         engine.start(currentNode.value, Store.getThreadNum());
         refreshPlayUI();
-        if (Store.getKeepBg()) requestWakeLock();
+        syncBgService();
       }
     }, 600);
   }
+
+  // 回到前台：清掉后台期间累积的速率窗口，避免瞬时速度跳变
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && engine.running) {
+      engine.resetRateWindow();
+      renderMetrics(engine);
+    }
+  });
 
   // 防双击缩放（对齐原站）
   let lastTouchEnd = 0;
