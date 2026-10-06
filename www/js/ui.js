@@ -127,8 +127,9 @@
     renderMetrics(e);
     persistPeak();
   });
-  engine.on("stop", (reason) => {
+  engine.on("stop", (reason, detail) => {
     if (reason === "reachMaxUse") toast("已达到用量上限，自动停止");
+    if (reason === "nodeRejected") toast("「" + (currentNode ? currentNode.label : "该节点") + "」拒绝访问（" + detail + "），已停止，请更换节点", 4200);
     renderMetrics({ ...engine, running: false });
     refreshPlayUI();
     syncBgService();
@@ -137,11 +138,12 @@
   engine.on("error", (e) => {
     console.warn("[speedtest]", e.msg, "consecutive:", e.consecutive);
     const now = Date.now();
+    const node = currentNode ? "「" + currentNode.label + "」" : "";
     if (e.consecutive >= 3) {
       // 连续失败：说明不是偶发抖动，明确提示且降低打扰频率
       if (now - lastWarnToast > 15000) {
         lastWarnToast = now;
-        toast("节点连接不稳定，已自动重试；建议降低线程数或更换节点", 3200);
+        toast(node + "连接不稳定（" + e.msg + "），已自动重试；建议更换节点或降低线程数", 3200);
       }
     } else if (now - lastInfoToast > 30000) {
       // 偶发失败：静默重试即可，最多轻描淡写提一次

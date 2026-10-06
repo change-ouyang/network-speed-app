@@ -121,6 +121,13 @@
             this._offsets[id] = 0; // 超出文件末尾，回卷从头继续
             continue;
           }
+          // 4xx 明确拒绝（除 429 限频外）重试无意义：直接停止并告知换节点
+          const rej = e && /^(HTTP 4(?!29)\d\d)$/.exec(e.message || "");
+          if (rej) {
+            this.stop();
+            if (this._onStop) this._onStop("nodeRejected", rej[1]);
+            return;
+          }
           this._consecFail++;
           const msg = e && e.message ? e.message : String(e);
           if (this._onError) this._onError({ msg, consecutive: this._consecFail });

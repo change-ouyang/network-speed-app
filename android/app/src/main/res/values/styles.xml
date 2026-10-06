@@ -13,6 +13,10 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- 全面屏下 WebView 上方/下方露出的系统条区域用顶栏同款深色，状态栏白色图标可读 -->
+        <item name="android:windowBackground">#10131A</item>
+        <item name="android:statusBarColor">#10131A</item>
+        <item name="android:navigationBarColor">#10131A</item>
     </style>
 
 
