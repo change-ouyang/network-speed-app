@@ -63,14 +63,14 @@ public class SpeedForegroundService extends Service {
             nm.createNotificationChannel(ch);
             return new Notification.Builder(this, CHANNEL_ID)
                     .setContentTitle("网络速度")
-                    .setText("后台测速进行中")
+                    .setContentText("后台测速进行中")
                     .setSmallIcon(android.R.drawable.stat_sys_download)
                     .setOngoing(true)
                     .build();
         }
         return new Notification.Builder(this)
                 .setContentTitle("网络速度")
-                .setText("后台测速进行中")
+                .setContentText("后台测速进行中")
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setOngoing(true)
                 .build();
