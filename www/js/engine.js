@@ -4,9 +4,9 @@
 (function () {
   "use strict";
 
-  const CHUNK = 2 * 1024 * 1024; // 单请求分块大小
+  const CHUNK = 1024 * 1024;     // 单请求分块大小（1MiB：慢速连接下也能在超时内完成）
   const TICK = 1000;             // 速率统计周期 ms
-  const TIMEOUT = 15000;         // 单请求超时保护
+  const TIMEOUT = 30000;         // 单请求超时保护
 
   class SpeedEngine {
     constructor() {
