@@ -51,6 +51,12 @@
       const p = plugin("App");
       if (!isNative() || !p || !p.getInfo) return null;
       try { return await p.getInfo(); } catch (e) { return null; }
+    },
+    // 调起系统分享面板；浏览器预览返回 false（调用方回退复制链接）
+    async share(opts) {
+      const p = plugin("Share");
+      if (!isNative() || !p || !p.share) return false;
+      try { await p.share(opts); return true; } catch (e) { return false; }
     }
   };
 })();

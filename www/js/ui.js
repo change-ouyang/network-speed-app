@@ -267,9 +267,15 @@
           text: "添加", fn: () => {
             const name = $("inCName").value.trim();
             const url = $("inCUrl").value.trim();
-            if (!name || !/^https?:\/\//i.test(url)) { toast("请填写名称与合法地址"); return; }
+            if (!name) { toast("请填写名称"); return; }
+            // 结构校验：必须是合法 URL 且为 https（App 明文策略拦截 http）
+            let u;
+            try {
+              u = new URL(url);
+            } catch (e) { toast("地址格式不正确，需完整 URL（如 https://example.com/file.jpg）"); return; }
+            if (u.protocol !== "https:") { toast("仅支持 https 地址（http 会被系统明文策略拦截）"); return; }
             const arr = Store.getCustomNodes();
-            arr.push({ label: name, value: url });
+            arr.push({ label: name, value: u.href });
             Store.setJSON(Store.K.customNodes, arr);
             buildSelectPanel();
             renderCustomModal();
@@ -317,6 +323,17 @@
       "<p class='muted center-url'>" + escapeHTML(currentNode.value) + "</p>",
       [
         { text: "关闭", cls: "plain", fn: closeModal },
+        {
+          text: "系统分享", fn: async () => {
+            const ok = await window.SpeedNative.share({
+              title: "网络速度自查",
+              text: currentNode.label + " 测速地址",
+              url: currentNode.value,
+              dialogTitle: "分享测试地址"
+            });
+            if (!ok) { toast("当前环境不支持系统分享，已复制链接"); await copyCurrentUrl(); }
+          }
+        },
         { text: "复制链接", fn: copyCurrentUrl }
       ]);
     const box = $("qrBox");
@@ -435,8 +452,6 @@
   }
   $("ipCard").addEventListener("click", () => loadGeo(true));
 
-  // ---------- 海报分享 ----------
-  // 暂以复制链接为核心分享路径；海报功能在 M4 结合 html2canvas 完善
 
   // ---------- 初始化 ----------
   const last = Store.getLastNode();
