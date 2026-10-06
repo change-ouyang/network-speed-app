@@ -111,6 +111,7 @@
           const n = await this._fetch(this.url, off);
           if (!this.running) break;
           this.totalBytes += n;
+          this._rejCount = 0;
           if (this._consecFail > 0) {
             this._consecFail = 0;
             if (this._onRecover) this._onRecover();
@@ -121,12 +122,17 @@
             this._offsets[id] = 0; // 超出文件末尾，回卷从头继续
             continue;
           }
-          // 4xx 明确拒绝（除 429 限频外）重试无意义：直接停止并告知换节点
+          // 4xx 明确拒绝（除 429 限频外）连续出现 3 次才停止：防止 CDN 单节点偶发拒绝误杀测试
           const rej = e && /^(HTTP 4(?!29)\d\d)$/.exec(e.message || "");
           if (rej) {
-            this.stop();
-            if (this._onStop) this._onStop("nodeRejected", rej[1]);
-            return;
+            this._rejCount = (this._rejCount || 0) + 1;
+            if (this._rejCount >= 3) {
+              this.stop();
+              if (this._onStop) this._onStop("nodeRejected", rej[1] + "，连续 " + this._rejCount + " 次");
+              return;
+            }
+            await new Promise(r => setTimeout(r, 1200 * this._rejCount));
+            continue;
           }
           this._consecFail++;
           const msg = e && e.message ? e.message : String(e);

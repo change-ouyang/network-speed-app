@@ -128,8 +128,10 @@
     persistPeak();
   });
   engine.on("stop", (reason, detail) => {
-    if (reason === "reachMaxUse") toast("已达到用量上限，自动停止");
-    if (reason === "nodeRejected") toast("「" + (currentNode ? currentNode.label : "该节点") + "」拒绝访问（" + detail + "），已停止，请更换节点", 4200);
+    let msg = "";
+    if (reason === "reachMaxUse") { msg = "已达到用量上限，自动停止"; toast(msg); }
+    if (reason === "nodeRejected") { msg = "自动停止：「" + (currentNode ? currentNode.label : "节点") + "」拒绝访问（" + detail + "），请更换节点"; toast(msg, 4200); }
+    $("runStatus").textContent = msg || (detail || "");
     renderMetrics({ ...engine, running: false });
     refreshPlayUI();
     syncBgService();
@@ -154,11 +156,13 @@
   engine.on("recover", () => {}); // 成功请求会把失败计数清零，无需打扰
   engine.on("stall", () => {
     toast("节点响应缓慢或已限流，正在等待恢复…", 3000);
+    $("runStatus").textContent = "节点响应缓慢或已限流，正在等待恢复…";
   });
 
   function refreshPlayUI() {
     $("icPlay").style.display = engine.running ? "none" : "";
     $("icPause").style.display = engine.running ? "" : "none";
+    if (engine.running) $("runStatus").textContent = "";
     if (!engine.running) {
       $("mSpeedLabel").textContent = "平均速度";
     }

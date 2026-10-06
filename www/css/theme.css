@@ -138,6 +138,11 @@ input[type="range"]::-webkit-slider-thumb {
 .band-bar i { display: block; height: 100%; width: 0%; background: var(--accent); border-radius: 3px; transition: width .4s; }
 
 .play-zone { position: relative; display: flex; justify-content: center; padding: 26px 0 8px; }
+.run-status {
+  min-height: 18px; margin-top: 6px; text-align: center;
+  color: var(--muted); font-size: .85rem; line-height: 1.5;
+  word-break: break-all;
+}
 .play-btn {
   width: 128px; height: 128px; border-radius: 50%; border: none; cursor: pointer;
   background: radial-gradient(circle at 35% 30%, #3f8dff, #0f5be0 75%);
