@@ -3,6 +3,7 @@ package com.ouyang.speedcheck;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -54,25 +55,33 @@ public class SpeedForegroundService extends Service {
         }
     }
 
+    /** 点击通知回到 App：singleTask + CLEAR_TOP 复用已有实例，不会重开一个页面。 */
+    private PendingIntent contentIntent() {
+        Intent launch = new Intent(this, MainActivity.class);
+        launch.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getActivity(this, 0, launch, flags);
+    }
+
     @SuppressWarnings("deprecation")
     private Notification buildNotification() {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "后台测速", NotificationManager.IMPORTANCE_LOW);
             ch.setDescription("后台测速进行中的常驻通知");
             nm.createNotificationChannel(ch);
-            return new Notification.Builder(this, CHANNEL_ID)
-                    .setContentTitle("网络速度")
-                    .setContentText("后台测速进行中")
-                    .setSmallIcon(android.R.drawable.stat_sys_download)
-                    .setOngoing(true)
-                    .build();
+            builder = new Notification.Builder(this, CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(this);
         }
-        return new Notification.Builder(this)
+        return builder
                 .setContentTitle("网络速度")
-                .setContentText("后台测速进行中")
-                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentText("后台测速进行中，点击回到应用")
+                .setSmallIcon(R.drawable.ic_stat_speed)
+                .setContentIntent(contentIntent())
                 .setOngoing(true)
+                .setShowWhen(false)
                 .build();
     }
 }

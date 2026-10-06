@@ -9,6 +9,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // 注意：CI 打包时（.github/workflows/android.yml）会用 github.run_number 自动递增 versionCode / versionName，
+        // 这里只作为本地构建的默认值。
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

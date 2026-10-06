@@ -16,19 +16,6 @@
     } finally { clearTimeout(t); }
   }
 
-  // 启智云（百度云加速）：国内可达，含运营商字段
-  async function fromQifu() {
-    const d = await fetchJSON("https://qifu-api.baidubce.com/ip/local/geo/v1/district");
-    if (!d || !d.ip) throw new Error("bad qifu");
-    const c = (d.data && (d.data.dist || d.data.city)) || "";
-    return { ip: d.ip, text: c + ", " + ((d.data && d.data.isp) || "") };
-  }
-  // ip-api.com（免费版 http，45 次/分钟）
-  async function fromIpApi() {
-    const d = await fetchJSON("http://ip-api.com/json/?lang=zh-CN&fields=query,country,city,isp");
-    if (!d || !d.query) throw new Error("bad ip-api");
-    return { ip: d.query, text: (d.city || d.country || "") + ", " + (d.isp || "") };
-  }
   // ip.sb：全球可达，含 ISP
   async function fromIpSb() {
     const d = await fetchJSON("https://api.ip.sb/geoip");
@@ -63,7 +50,7 @@
     return { ip: d.ip, text: (d.city || "") + ", " + (d.org || "") };
   }
 
-  const PROVIDERS = [fromQifu, fromIpApi, fromIpSb, fromIpwhoIs, fromFreeIpApi, fromIpapiCo, fromCfTrace];
+  const PROVIDERS = [fromIpSb, fromIpwhoIs, fromFreeIpApi, fromIpapiCo, fromCfTrace];
 
   window.Geo = {
     async query(force) {

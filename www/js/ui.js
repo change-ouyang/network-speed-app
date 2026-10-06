@@ -173,6 +173,7 @@
     if (engine.running) {
       engine.stop();
       refreshPlayUI();
+      renderMetrics(engine);
       syncBgService();
     } else {
       engine.start(currentNode.value, Store.getThreadNum());
@@ -184,7 +185,9 @@
   // ---------- 弹窗：用量上限 ----------
   function parseBytesInput(str) {
     if (!str) return 0;
-    const m = /^([\d.]+)\s*(B|KB|MB|GB|TB)?$/i.exec(str.trim());
+    // 允许末尾带 "/s"（速率单位），这样「10MB/s」「10 MB/s」「10MB」都能正确解析
+    const s = String(str).trim().replace(/\/s$/i, "").trim();
+    const m = /^([\d.]+)\s*(B|KB|MB|GB|TB)?$/i.exec(s);
     if (!m) return NaN;
     const mult = { "": 1, B: 1, KB: 1024, MB: 1048576, GB: 1073741824, TB: 1 << 40 }[(m[2] || "").toUpperCase()];
     return Math.round(parseFloat(m[1]) * mult);
@@ -221,8 +224,7 @@
         { text: "取消", cls: "plain", fn: closeModal },
         {
           text: "确定", fn: () => {
-            const s = ($("inLimit").value || "").trim();
-            const v = s ? parseBytesInput(s + "/s".repeat(/\d\s*[kmgt]?b?\/s$/i.test(s) ? 0 : 1)) : 0;
+            const v = parseBytesInput($("inLimit").value || "");
             if (isNaN(v)) { toast("格式不正确"); return; }
             Store.set(Store.K.speedLimit, v);
             engine.speedLimit = v;
@@ -238,7 +240,7 @@
     const p = engine.predict();
     const row = (k, v) => "<div class='custom-item'><span>" + k + "</span><b>" + (engine.running || engine.speed > 0 ? window.formatBytes(v, 1) : "-") + "</b></div>";
     openModal("按当前速率的用量预测",
-      row("每小时", p.hour) + row("每天", p.day) + row("每月（按 30 天）", p.mon) +
+      row("每分钟", p.min) + row("每小时", p.hour) + row("每天", p.day) + row("每月（按 30 天）", p.mon) +
       '<p class="muted">当前速率：' + (engine.running ? window.formatBytes(engine.speed, 0) : "未在测试") + "</p>",
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
@@ -258,7 +260,7 @@
       "<p style='margin:10px 0 0'><b>添加地址</b></p>" +
       "<input class='m-input' id='inCName' placeholder='名称'>" +
       "<input class='m-input' id='inCUrl' placeholder='地址：https://...'>" +
-      "<p class='muted'>注意：目标文件建议为较大文件；App 走原生网络栈，无浏览器跨域限制。</p>",
+      "<p class='muted'>注意：目标文件建议为较大文件；App 走原生网络栈，无浏览器跨域限制，但仅支持 https 地址（http 会被系统明文策略拦截）。</p>",
       [
         { text: "取消", cls: "plain", fn: closeModal },
         {
@@ -289,8 +291,8 @@
     return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  // ---------- 复制链接 ----------
-  $("btnCopyUrl").addEventListener("click", async () => {
+  // ---------- 复制 / 分享链接 ----------
+  async function copyCurrentUrl() {
     if (!currentNode) return;
     try {
       await navigator.clipboard.writeText(currentNode.value);
@@ -303,17 +305,51 @@
       try { document.execCommand("copy"); toast("已复制当前测试链接"); } catch (e2) { toast("复制失败"); }
       inp.remove();
     }
+  }
+  $("btnCopyUrl").addEventListener("click", copyCurrentUrl);
+
+  // 分享面板：展示当前测试地址 + 二维码（复用已加载的 qrcode.min.js），支持一键复制
+  $("btnShare").addEventListener("click", () => {
+    if (!currentNode) { toast("请先选择测试地址"); return; }
+    openModal("分享测试地址",
+      "<p class='share-name'>" + escapeHTML(currentNode.label) + "</p>" +
+      "<div id='qrBox' class='qr-box'></div>" +
+      "<p class='muted center-url'>" + escapeHTML(currentNode.value) + "</p>",
+      [
+        { text: "关闭", cls: "plain", fn: closeModal },
+        { text: "复制链接", fn: copyCurrentUrl }
+      ]);
+    const box = $("qrBox");
+    if (!box || !window.QRCode) return;
+    box.innerHTML = "";
+    try {
+      new window.QRCode(box, {
+        text: currentNode.value,
+        width: 180,
+        height: 180,
+        colorDark: "#10131a",
+        colorLight: "#ffffff",
+        correctLevel: window.QRCode.CorrectLevel.M
+      });
+    } catch (e) {
+      box.innerHTML = "<span class='muted'>二维码生成失败</span>";
+    }
   });
 
   // ---------- 说明 / 公告 ----------
-  $("btnAbout").addEventListener("click", () => {
+  $("btnAbout").addEventListener("click", async () => {
+    const info = await window.SpeedNative.getInfo();
+    const verLine = info
+      ? "<p class='muted'>当前版本：" + escapeHTML(String(info.version)) + "（构建 " + escapeHTML(String(info.build)) + "）</p>"
+      : "";
     openModal("使用说明",
       "<p><b>关于本页</b></p>" +
       "<p>1、本应用为「网络速度」安卓端，与网页版功能保持一致：多线程循环下载真实公开文件测速，实时显示总使用量、速度与带宽峰值；</p>" +
       "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；部分国产 ROM 需在系统设置中允许本应用「后台运行/自启动」并把省电策略设为无限制；</p>" +
       "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
-      "<p>5、App 端通过原生网络栈直连，无浏览器跨域与混合内容限制。</p>",
+      "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
+      verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
 
@@ -325,9 +361,9 @@
       "<p>3、测试会产生真实的下载流量，请留意用量上限设置。</p>",
       [
         {
-          text: "退出使用", cls: "danger", fn: () => {
-            window.close();
-            setTimeout(() => { closeModal(); toast("如需退出请直接关闭应用"); }, 300);
+          text: "退出使用", cls: "danger", fn: async () => {
+            const done = await window.SpeedNative.exitApp();
+            if (!done) { closeModal(); toast("浏览器预览无法退出，请直接关闭页面"); }
           }
         },
         { text: "我已知悉", fn: () => { Store.set(Store.K.acknowledged, "true"); closeModal(); } }
@@ -439,6 +475,22 @@
       engine.resetRateWindow();
       renderMetrics(engine);
     }
+  });
+
+  // 系统返回键：优先关掉最上层浮层（弹窗 / 全屏图表 / 下拉），没有浮层时退出应用
+  function closeTopLayer() {
+    if ($("modalMask").classList.contains("open")) { closeModal(); return true; }
+    if ($("chartOverlay").classList.contains("open")) {
+      $("chartOverlay").classList.remove("open");
+      if (chartRAF) cancelAnimationFrame(chartRAF);
+      return true;
+    }
+    if ($("sel").classList.contains("open")) { toggleSelect(false); return true; }
+    return false;
+  }
+  window.SpeedNative.onBack(() => {
+    if (closeTopLayer()) return;    // 有关闭动作：拦截返回
+    window.SpeedNative.exitApp();   // 无浮层：退出应用
   });
 
   // 防双击缩放（对齐原站）

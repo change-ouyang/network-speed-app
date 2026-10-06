@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主题色：与 Web 层 accent 色、深色顶栏保持一致 -->
+    <color name="colorPrimary">#409EFF</color>
+    <color name="colorPrimaryDark">#10131A</color>
+    <color name="colorAccent">#409EFF</color>
+</resources>

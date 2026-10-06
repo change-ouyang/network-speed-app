@@ -2,6 +2,12 @@
 // disabled: true 的分组保留数据但不展示（全球海外组，按需求停用）
 window.NODE_GROUPS = [
   {
+    label: "270专项",
+    options: [
+      { label: "咕咪快游2", value: "https://gcache.migu.cn/depository_cmamgame01_dob01/channel_for_homepage_game2/202608/0513/49/B1589500/media/1111301_m3u8_ts/00000.ts" }
+    ]
+  },
+  {
     label: "热门应用",
     options: [
       { label: "微软商店", value: "https://cdn.microsoftstore.com.cn/media/product_long_description/3781-00000/2_dupn50xr/4h0yzz2_360.jpg" },
@@ -10,7 +16,6 @@ window.NODE_GROUPS = [
       { label: "Bilibili", value: "https://s1.hdslb.com/bfs/game-static/web/caster/static/script/vue/da3f37d7fd8339357ed671a94941757e/st.zip" },
       { label: "爱奇艺", value: "https://static-d.iqiyi.com/ext/common/iQIYIMedia_000.dmg" },
       { label: "腾讯视频", value: "https://puui.qpic.cn/vpic_cover/g3346tki83w/g3346tki83w_hz.jpg" },
-      { label: "头条/抖音", value: "https://lf3-beecdn.bytetos.com/obj/ies-fe-bee/bee_prod/biz_809/tos_b3410a051c43208d6673cd44e9aeacdc.mp4" },
       { label: "OPPO", value: "https://dsfs.oppo.com/oppo/shop-pc-v2/main/js/9fb472f.js" },
       { label: "VIVO", value: "https://wwwstatic.vivo.com.cn/vivoportal/files/resource/funtouch/1651200648928/images/os2-jude-video.mp4" },
       { label: "UC/夸克", value: "https://image.uc.cn/s/uae/g/3o/broccoli/resource/202401/zry_video.mp4" }

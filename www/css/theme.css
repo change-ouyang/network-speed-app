@@ -210,3 +210,9 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: .9rem; z-index: 99; display: none; max-width: 80vw; text-align: center;
 }
 .toast.show { display: block; }
+
+/* 分享面板：名称 + 二维码 + 地址 */
+.share-name { text-align: center; font-weight: 600; margin: 4px 0 10px; }
+.qr-box { display: flex; justify-content: center; margin: 6px 0 10px; }
+.qr-box img, .qr-box canvas { border-radius: 8px; }
+.center-url { text-align: center; word-break: break-all; }

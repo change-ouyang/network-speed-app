@@ -35,6 +35,7 @@
       this._onRecover = null;
       this._onStall = null;
       this._consecFail = 0;     // 全局连续失败计数（供 UI 决定是否打扰用户）
+      this._rejCount = 0;       // 连续 4xx 拒绝计数（判定节点拒绝访问）
       this._lastProgressBytes = 0;
       this._lastProgressAt = 0;
       this._wasStalled = false;
@@ -111,6 +112,12 @@
           const n = await this._fetch(this.url, off);
           if (!this.running) break;
           this.totalBytes += n;
+          // 用量上限：请求级即时检查（比 _tick 的 1s 粒度更精确，避免高速网络下大幅超标）
+          if (this.maxUse > 0 && this.totalBytes >= this.maxUse && this.running) {
+            this.stop();
+            if (this._onStop) this._onStop("reachMaxUse");
+            break;
+          }
           this._rejCount = 0;
           if (this._consecFail > 0) {
             this._consecFail = 0;
@@ -195,7 +202,9 @@
       }
     }
 
-    setUrl(url) { this.url = url; this._sizeKnown = 0; this._rangeMode = null; this._offsets = this._offsets.map(() => 0); }    setThreads(n) {
+    setUrl(url) { this.url = url; this._sizeKnown = 0; this._rangeMode = null; this._offsets = this._offsets.map(() => 0); }
+
+    setThreads(n) {
       n = Math.max(1, Math.min(32, n | 0));
       if (!this.running) { this.threads = n; return; }
       while (this.threads < n) { const id = this.threads++; this._offsets[id] = 0; this._workers.push(this._worker(id).catch(() => {})); }

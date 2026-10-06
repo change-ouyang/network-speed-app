@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "网络速度：安卓端测速 App（Capacitor WebView 壳，复刻 270666.xyz 网络速度自查）",
   "scripts": {
-    "cap:sync": "cap sync android"
+    "cap:sync": "cap sync android",
+    "assets": "capacitor-assets generate",
+    "preview": "python analysis/preview_server.py"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
