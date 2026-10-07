@@ -206,10 +206,14 @@ node analysis/engine_harness.js www/js/engine.js
 # 4) 原生代码编译校验（本机无 Android SDK，用最小桩类做编译级体检，避免 CI 出包失败）
 node analysis/java_check.js    # 期望「Java 编译校验通过 ✓」
 
-# 5) 真实节点探测（需要联网；确认各节点对 整包/Range/越界 的真实反应）
-node analysis/node_probe.js    # 2026-10-06 实测：15 个节点全部可达，越界均为标准 416，无硬拒
+# 5) UI 交棒状态机回归（假 DOM + 假原生桥 + 真引擎，覆盖前后台交棒/竞态/清算/退出）
+node analysis/ui_handoff_harness.js   # 期望「通过 20 项，失败 0 项」
 
-# 6) 出包验收（唯一真实验证途径）
+# 6) 真实节点探测（需要联网；确认各节点对 整包/Range/越界 的真实反应）
+node analysis/node_probe.js            # 2026-10-06 实测：15 个节点全部可达，越界均为标准 416，无硬拒
+node analysis/concurrency_probe.js "咕咪快游2" "8,16,32"   # 32 并发全部 200、零限流 ⇒ 报错来自手机侧网络
+
+# 7) 出包验收（唯一真实验证途径）
 git push origin main           # 触发 android-apk workflow
 # 下载 artifact: traffic-consumer-apk → 手机侧载 → 按第 3 节各条「验收」核对
 ```
@@ -243,3 +247,5 @@ git push origin main           # 触发 android-apk workflow
 - **并发探测**（`concurrency_probe.js`）：对用户的「咕咪快游2」压 8/16/32 并发各 3 轮 —— **全部 200、零失败、零限流** ⇒ 节点侧不拒绝 32 线程；主人遇到的「连接不稳定/个别请求失败」来自**手机侧**（移动网络 NAT/连接数限制导致部分请求超时或中断），所以正确对策是「静默退避重试、绝不因此停止」，而不是降低线程数或弹窗告警。
 - **引擎回归**：21 场景（含 8/32 线程、真实节点形状、15% 5xx、20% 429、后台节流/冻结/过期定时器竞态）全部「浪费 0%、可见提示 0」；唯一「被终止」的是 S10 用量上限（设计行为）。
 - **无人看管的原生泵**已加两道保险：退出应用/划掉最近任务（`onTaskRemoved`）停泵停服务；页面被系统回收后重载时，初始化阶段显式 `disarmPump()` + `bgDisable()`。
+- **对抗性评审（子代理，第 5 轮）**：独立评审 `e430c12..HEAD` 的交棒逻辑，提出 12 项问题（2 阻断 + 3 严重 + 4 一般 + 3 建议），已全部修复（详见提交 `c70d36d`）：僵尸态代际守卫 `visEpoch`、泵线程中断退出、`startPump` 识别切换节点、用量上限按「本世代增量」并在命中时撤销授权、`pumpSettling` 节流、授权 60 秒心跳、`PUMP_BYTES/PUMP_DRAINED` 单调账目、`disarmPump` 回传字节要求 absorb、`startForeground` try/catch。
+- **UI 交棒状态机测试台**（`ui_handoff_harness.js`，第 6 轮新增）：假 DOM + 假原生桥 + 真 `engine.js`/`ui.js`，5 组共 20 项断言全部通过 —— 其中 T2 就是「交棒途中切回前台」这个阻断级僵尸态的回归测试；T3 保证反复回前台不会重复计数；T5 保证退出时原生字节不丢账。
