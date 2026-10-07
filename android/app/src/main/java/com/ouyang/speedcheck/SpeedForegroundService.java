@@ -123,7 +123,7 @@ public class SpeedForegroundService extends Service {
 
     @Override
     public void onDestroy() {
-        stopPump();
+        stopWorkers();   // 不领走字节：JS 若还在，下一次清算会入账
         instance = null;
         if (screenReceiver != null) {
             try {
@@ -141,7 +141,7 @@ public class SpeedForegroundService extends Service {
     /** 用户从最近任务里划掉应用：立刻停泵并停服务（否则原生泵会无人看管地一直消耗流量）。 */
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        stopPump();
+        stopWorkers();
         stopSelf();
         super.onTaskRemoved(rootIntent);
     }
@@ -183,8 +183,9 @@ public class SpeedForegroundService extends Service {
         }
         if (pumpRunning) {
             // 参数变了（测试中切换了节点/线程数）：先停干净再按新参数重建，绝不继续下载旧地址。
+            // 用 stopWorkers()（不领走字节）：字节留在计数器里，等 JS 下一次清算统一入账，绝不丢账。
             // 注意必须在锁外停：泵线程自己也会抢 PUMP_LOCK，锁内 join 会互相等待。
-            stopPump();
+            stopWorkers();
         }
         synchronized (PUMP_LOCK) {
             if (pumpRunning) {
@@ -209,13 +210,10 @@ public class SpeedForegroundService extends Service {
     }
 
     /**
-     * 停止后台泵并返回「本次尚未被 JS 领走」的字节数。
-     *
-     * <p>读数语义：{@code PUMP_BYTES} 是进程内累计量（只增不减），{@code PUMP_DRAINED} 是已被领走的量，
-     * 所以重复调用只会得到 0，也不会因为中途重建世代而丢字节。
-     * 必须先把线程真正停下来再读数，否则仍在 read() 中的线程会把最后一批字节加进来重复计数。
+     * 只停线程并等待它们退出，**不领走字节**（内部重建与生命周期清理用）：
+     * 字节保持「未被领走」状态，等 JS 侧下一次清算时入账，避免返回值被丢弃造成静默丢账。
      */
-    public static long stopPump() {
+    private static void stopWorkers() {
         List<Thread> workers;
         synchronized (PUMP_LOCK) {
             pumpRunning = false;
@@ -236,16 +234,38 @@ public class SpeedForegroundService extends Service {
                 }
             }
         }
-        // 在锁外等待线程退出（它们退出前还要抢 PUMP_LOCK 摘除连接）
+        // 必须在锁外等待：工作线程退出前还要抢 PUMP_LOCK，锁内 join 会互相等待。
+        // 用统一截止时间，避免 32 个线程串行 join(400) 拖成十几秒（onDestroy/onTaskRemoved 在主线程上，会卡顿）
+        long deadline = System.currentTimeMillis() + 600;
         for (int i = 0; i < workers.size(); i++) {
+            long left = deadline - System.currentTimeMillis();
+            if (left <= 0) {
+                break;
+            }
             try {
-                workers.get(i).join(400);
+                workers.get(i).join(left);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                break;
             }
         }
-        long total = PUMP_BYTES.get();
-        long drained = PUMP_DRAINED.getAndSet(total);
+    }
+
+    /**
+     * 停止后台泵并返回「本次尚未被 JS 领走」的字节数。
+     *
+     * <p>读数语义：{@code PUMP_BYTES} 是进程内累计量（只增不减），{@code PUMP_DRAINED} 是已被领走的量，
+     * 所以重复调用只会得到 0，中途重建世代也不会丢字节。
+     */
+    public static long stopPump() {
+        stopWorkers();
+        long total;
+        long drained;
+        synchronized (PUMP_LOCK) {
+            // 原子读改写：主线程与插件线程可能并发 drain，不能 read-then-write
+            total = PUMP_BYTES.get();
+            drained = PUMP_DRAINED.getAndSet(total);
+        }
         return Math.max(0, total - drained);
     }
 
@@ -377,10 +397,12 @@ public class SpeedForegroundService extends Service {
         }
         try {
             NotificationManager nm = (NotificationManager) svc.getSystemService(Context.NOTIFICATION_SERVICE);
-            // PUMP_BYTES 是进程内累计量（只增不减），所以多次接管时通知里的数字不会回退
+            // 通知文案 = JS 侧交棒时的累计量 + 本世代原生增量。
+            // PUMP_BYTES 是进程内累计量（跨世代不清零），所以必须减掉 pumpGenStartBytes，
+            // 否则第 2 代起会把历史已领走的量重复计入，数字虚高。
             String text = overrideText != null
                     ? overrideText
-                    : "后台消耗中 · 累计 " + humanBytes(pumpBaseBytes + PUMP_BYTES.get());
+                    : "后台消耗中 · 累计 " + humanBytes(pumpBaseBytes + (PUMP_BYTES.get() - pumpGenStartBytes));
             nm.notify(NOTIFY_ID, svc.buildNotification(text));
         } catch (Throwable ignored) {
             // 通知更新失败不影响下载

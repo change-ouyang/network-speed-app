@@ -126,9 +126,21 @@ function makeHarness() {
     share: async () => false,
   };
 
+  // 可推进的虚拟时钟：让「入账 → 下一秒统计」之间的时间真实发生（真实时间下 dt<1 会跳过速率计算，
+  // 导致「后台整批被算成 1 秒速度」这类缺陷测不出来）
+  let clockOffset = 0;
+  class SandboxDate extends Date {
+    constructor(...args) {
+      if (args.length === 0) super(Date.now() + clockOffset);
+      else super(...args);
+    }
+    static now() { return Date.now() + clockOffset; }
+  }
+
   const sandbox = {
-    console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, Date, Math, JSON, isFinite, NaN, Number, String, parseInt, parseFloat,
+    console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, Math, JSON, isFinite, NaN, Number, String, parseInt, parseFloat,
     AbortController,
+    Date: SandboxDate,
     requestAnimationFrame: (fn) => { return 0; },   // 不真的跑动画帧（ui.js 的图表渲染对测试无关）
     cancelAnimationFrame: () => {},
     fetch: () => Promise.reject(new Error("no network in harness")),
@@ -145,7 +157,10 @@ function makeHarness() {
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
 
-  const load = (f) => vm.runInContext(fs.readFileSync(path.join(WWW, f), "utf8"), sandbox, { filename: f });
+  const load = (f) => {
+    const p = path.isAbsolute(f) ? f : path.join(WWW, f);
+    return vm.runInContext(fs.readFileSync(p, "utf8"), sandbox, { filename: p });
+  };
   // 顺序与 index.html 一致；不加载 native.js（用假桥替代）
   load("js/nodes.js");
   load("js/store.js");
@@ -163,7 +178,8 @@ function makeHarness() {
     return engine;
   };
   sandbox.window.SpeedNative = native;
-  load("js/ui.js");
+  // 变异测试用：UI_HARNESS_UI 可指向一份被故意改坏的 ui.js（验证测试台真的能发现问题）
+  load(process.env.UI_HARNESS_UI || "js/ui.js");
 
   const el = (id) => documentStub.getElementById(id);
   const fireEl = (id, type, ev) => {
@@ -185,7 +201,7 @@ function makeHarness() {
     await flush(); await flush();
   };
 
-  return { native, engine: () => engine, el, fireEl, fireDoc, setHidden, storage, documentStub };
+  return { native, engine: () => engine, el, fireEl, fireDoc, setHidden, storage, documentStub, advance: (ms) => { clockOffset += ms; } };
 }
 
 // ---------------- 断言 ----------------
@@ -299,6 +315,33 @@ function check(name, cond, extra) {
     check("退出前调用了 bgDisable", h.native.calls.includes("bgDisable"));
     check("退出前调用了 exitApp", h.native.calls.includes("exitApp"));
     check("退出时原生 7MiB 未丢账", eng.totalBytes >= 7 * 1048576, `total=${eng.totalBytes}`);
+  }
+
+  // ---- T6 后台整批流量不得被当成「1 秒速度」而污染带宽峰值（复审 S1 的回归测试）----
+  // 注意必须走「息屏时原生自己接管、JS 没被停」这条路径：走交棒路径时 engine.start() 会顺带重置速率窗口，
+  // 会把这个缺陷掩盖掉（浮浮酱第一版 T6 就是这么写错的，变异测试 M5 没抓到）。
+  console.log("\nT6 原生自动接管后入账：不得污染实时速度与带宽峰值");
+  {
+    const h = makeHarness();
+    const eng = h.engine();
+    eng.peakSpeed = 0;
+    h.fireEl("btnPlay", "click");
+    await flush();
+    h.native.pumpStart = async () => { h.native.calls.push("pumpStart"); return false; };  // 交棒失败：JS 继续跑
+    await h.setHidden(true);
+    h.native.pumpRunning = true;           // 息屏广播让原生自己接管了
+    h.native.pumpBytes = 60 * 1048576;     // 后台挂了很久，原生侧一口气消耗 60MiB
+    await h.setHidden(false);
+    h.advance(1500);                       // 让时间真的往前走 1.5 秒（否则 dt<1 会跳过速率计算）
+    eng._tick();                           // 让引擎记一次速率
+    const mbps = (eng.speed * 8) / 1e6;
+    check(
+      "入账后实时速度没有被整批流量顶起来",
+      eng.speed < 1048576,
+      `speed=${(eng.speed / 1048576).toFixed(1)}MiB/s（${mbps.toFixed(0)}Mbps）`
+    );
+    check("带宽峰值未被污染", eng.peakSpeed < 1048576, `peak=${(eng.peakSpeed / 1048576).toFixed(1)}MiB/s`);
+    check("总用量仍然入账了 60MiB", eng.totalBytes >= 60 * 1048576, `total=${(eng.totalBytes / 1048576).toFixed(1)}MiB`);
   }
 
   console.log("\n" + "=".repeat(76));

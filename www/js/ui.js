@@ -595,6 +595,9 @@
     engine.sessionBytes += bytes;
     pumpOn = false;
     persistTotalUse(true);
+    // 关键：并入的是「后台整批」的字节，绝不能被当成 1 秒内到达的速率 ——
+    // 否则实时速度会瞬间虚高，并**永久污染带宽峰值**（peakSpeed 会落盘到 localStorage）
+    engine.resetRateWindow();
     renderMetrics(engine);
   }
 
@@ -641,7 +644,7 @@
         });
       }
       const st = await window.SpeedNative.pumpStats();
-      if (!st.bytes) return;
+      if (!st.bytes || document.hidden) return;   // 期间又切到后台：交给交棒逻辑处理，别把新起来的泵停掉
       absorbPumpBytes(await window.SpeedNative.pumpStop());   // 停泵并领走字节（含 renderMetrics）
     } finally {
       pumpSettling = false;
