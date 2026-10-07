@@ -98,6 +98,32 @@ public class SpeedServicePlugin extends Plugin {
         }
     }
 
+    /** 登记息屏自动接管参数；disarm 时同时停泵。 */
+    @PluginMethod
+    public void armPump(PluginCall call) {
+        try {
+            SpeedForegroundService.armPump(
+                    call.getString("url"),
+                    (int) parseLong(call.getString("threads"), 4L),
+                    parseLong(call.getString("limitBps"), 0L),
+                    parseLong(call.getString("budgetBytes"), 0L),
+                    parseLong(call.getString("alreadyBytes"), 0L));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("armPump failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void disarmPump(PluginCall call) {
+        try {
+            SpeedForegroundService.disarmPump();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("disarmPump failed: " + e.getMessage());
+        }
+    }
+
     private static long parseLong(String s, long fallback) {
         if (s == null) {
             return fallback;

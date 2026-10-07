@@ -26,4 +26,10 @@ public abstract class Context {
 
     /** 真实签名：public abstract boolean stopService(Intent service) */
     public abstract boolean stopService(Intent service);
+
+    /** 真实签名：public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) */
+    public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter);
+
+    /** 真实签名：public abstract void unregisterReceiver(BroadcastReceiver receiver) */
+    public abstract void unregisterReceiver(BroadcastReceiver receiver);
 }

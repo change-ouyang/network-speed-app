@@ -46,4 +46,10 @@ public class Activity extends Context {
     public boolean stopService(Intent service) {
         return false;
     }
+
+    public Intent registerReceiver(android.content.BroadcastReceiver receiver, android.content.IntentFilter filter) {
+        return null;
+    }
+
+    public void unregisterReceiver(android.content.BroadcastReceiver receiver) {}
 }

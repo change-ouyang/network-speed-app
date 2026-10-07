@@ -5,8 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
@@ -49,6 +51,14 @@ public class SpeedForegroundService extends Service {
     private static volatile long pumpNoteAt = 0;
     private static volatile SpeedForegroundService instance = null;
 
+    // 「已授权自动接管」的参数：JS 开始测试时登记，息屏广播里据此自动起泵
+    private static volatile String armedUrl = null;
+    private static volatile int armedThreads = 4;
+    private static volatile long armedLimitBps = 0;
+    private static volatile long armedBudgetBytes = 0;
+    private static volatile long armedBaseBytes = 0;
+    private BroadcastReceiver screenReceiver = null;
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -66,13 +76,47 @@ public class SpeedForegroundService extends Service {
         if (!wakeLock.isHeld()) {
             wakeLock.acquire();
         }
+        registerScreenReceiver();
         return START_STICKY;
+    }
+
+    /**
+     * 息屏兜底：WebView 有时来不及触发 visibilitychange（或 JS 已被系统冻结），
+     * 只要此前已被 armPump「授权」，息屏广播一到就由原生自己接管，保证息屏期间照样消耗流量。
+     */
+    private void registerScreenReceiver() {
+        if (screenReceiver != null) {
+            return;
+        }
+        screenReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent != null && Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    String url = armedUrl;
+                    if (url != null && !pumpRunning && instance != null) {
+                        startPump(url, armedThreads, armedLimitBps, armedBudgetBytes, armedBaseBytes);
+                    }
+                }
+            }
+        };
+        try {
+            registerReceiver(screenReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        } catch (Throwable t) {
+            screenReceiver = null;
+        }
     }
 
     @Override
     public void onDestroy() {
         stopPump();
         instance = null;
+        if (screenReceiver != null) {
+            try {
+                unregisterReceiver(screenReceiver);
+            } catch (Throwable ignored) {
+            }
+            screenReceiver = null;
+        }
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
@@ -135,7 +179,7 @@ public class SpeedForegroundService extends Service {
         return true;
     }
 
-    /** 停止后台泵并返回本轮原生侧消耗的字节数。 */
+    /** 停止后台泵并返回本轮原生侧消耗的字节数（读数即清零：重复调用只会得到 0，不会重复计数）。 */
     public static long stopPump() {
         long bytes;
         synchronized (PUMP_LOCK) {
@@ -155,9 +199,24 @@ public class SpeedForegroundService extends Service {
                 }
             }
             PUMP_WORKERS.clear();
-            bytes = PUMP_BYTES.get();
+            bytes = PUMP_BYTES.getAndSet(0);
         }
         return bytes;
+    }
+
+    /** 登记「允许息屏自动接管」的参数（JS 开始测试且开启保持后台运行时调用）。 */
+    public static void armPump(String url, int threads, long limitBps, long budgetBytes, long alreadyBytes) {
+        armedUrl = url;
+        armedThreads = Math.max(1, Math.min(32, threads));
+        armedLimitBps = Math.max(0, limitBps);
+        armedBudgetBytes = Math.max(0, budgetBytes);
+        armedBaseBytes = Math.max(0, alreadyBytes);
+    }
+
+    /** 撤销授权并停掉后台泵（测试结束 / 关闭保持后台运行 / 退出应用时调用）。 */
+    public static void disarmPump() {
+        armedUrl = null;
+        stopPump();
     }
 
     public static boolean isPumpRunning() {

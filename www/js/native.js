@@ -74,6 +74,30 @@
         return { running: !!(r && r.running), bytes: isFinite(n) && n > 0 ? n : 0 };
       } catch (e) { return { running: false, bytes: 0 }; }
     },
+    // 登记「允许息屏时由原生自动接管」的参数（测试中且开启保持后台运行时）
+    async armPump(url, threads, opts) {
+      if (!isNative()) return false;
+      const p = plugin("SpeedService");
+      if (!p || !p.armPump) return false;
+      const o = opts || {};
+      try {
+        await p.armPump({
+          url: String(url || ""),
+          threads: String(Math.max(1, Math.min(32, threads | 0))),
+          limitBps: String(Math.max(0, Math.round(o.limitBps || 0))),
+          budgetBytes: String(Math.max(0, Math.round(o.budgetBytes || 0))),
+          alreadyBytes: String(Math.max(0, Math.round(o.alreadyBytes || 0)))
+        });
+        return true;
+      } catch (e) { return false; }
+    },
+    // 撤销授权并停泵（测试结束 / 关闭后台运行 / 退出应用）
+    async disarmPump() {
+      if (!isNative()) return false;
+      const p = plugin("SpeedService");
+      if (!p || !p.disarmPump) return false;
+      try { await p.disarmPump(); return true; } catch (e) { return false; }
+    },
     // 退出应用：只结束当前 Activity；已开启的前台服务/后台测速不受影响
     async exitApp() {
       const p = plugin("App");

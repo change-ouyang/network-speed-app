@@ -80,4 +80,13 @@ public abstract class Service extends Context {
     public boolean stopService(Intent service) {
         return false;
     }
+
+    // ContextWrapper 同样为接收器注册提供了具体实现
+    @Override
+    public Intent registerReceiver(android.content.BroadcastReceiver receiver, android.content.IntentFilter filter) {
+        return null;
+    }
+
+    @Override
+    public void unregisterReceiver(android.content.BroadcastReceiver receiver) {}
 }

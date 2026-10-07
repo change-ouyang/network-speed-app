@@ -122,7 +122,7 @@
   // 后台运行 = 前台服务（测试中/原生后台泵在跑 且 开关开启时挂常驻服务，其余时候停掉）
   let bgWarned = false, bgHinted = false;
   // 原生后台泵与后台统计的状态（声明放在使用点之前，避免 TDZ）
-  let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0;
+  let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0, lastPumpSettleAt = 0, lastArmAt = 0;
   function syncBgService() {
     if ((engine.running || pumpOn) && Store.getKeepBg()) {
       // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
@@ -132,7 +132,17 @@
           toast("后台运行服务启动失败：请确认已允许通知权限（部分 ROM 还需允许本应用「后台运行/自启动」）", 4200);
         }
       });
+      // 登记息屏自动接管参数：万一 WebView 没来得及触发 visibilitychange，原生也能在息屏时接管
+      if (engine.url) {
+        lastArmAt = Date.now();
+        window.SpeedNative.armPump(engine.url, engine.threads, {
+          limitBps: engine.speedLimit,
+          budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
+          alreadyBytes: engine.totalBytes
+        });
+      }
     } else {
+      window.SpeedNative.disarmPump();   // 撤销授权并停泵（测试已停 / 开关已关）
       window.SpeedNative.bgDisable();
     }
   }
@@ -163,6 +173,7 @@
     renderMetrics(e);
     persistPeak();
     persistTotalUse(false);
+    maintainNativePump();   // 自节流（3 秒一次）：清算原生泵字节 + 刷新息屏授权参数
   });
   engine.on("stop", (reason, detail) => {
     let msg = "";
@@ -419,7 +430,8 @@
   async function shutdownBeforeExit() {
     try {
       engine.stop();
-      if (pumpOn) { await window.SpeedNative.pumpStop(); pumpOn = false; }
+      await window.SpeedNative.disarmPump();   // 停泵 + 撤销息屏自动接管
+      pumpOn = false;
       await window.SpeedNative.bgDisable();
     } catch (e) {}
   }
@@ -559,14 +571,14 @@
     }, 600);
   }
 
-  // ---- 后台交棒：WebView 的 JS 在切后台/息屏后会被系统冻结（真机实测：页面未重载但数字停住），
-  //      此时只有前台服务的原生线程还能继续消耗流量。故：切后台 → 交棒给原生泵；回前台 → 取回字节数并重启引擎。
+  // ---- 原生后台泵：切后台/息屏后 WebView 的 JS 会被系统冻结（真机实测：页面未重载但数字停住），
+  //      只有前台服务的原生线程还能继续消耗流量。两条触发路径最终都汇到 maintainNativePump() 清算字节：
+  //        ① 切后台：JS 交棒（handOffToNative）；② 息屏没来得及触发事件：原生按「已授权」参数自己接管。
   async function handOffToNative() {
     if (!engine.running || !Store.getKeepBg() || !engine.url) return false;
-    const budget = engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0;
     const ok = await window.SpeedNative.pumpStart(engine.url, engine.threads, {
       limitBps: engine.speedLimit,
-      budgetBytes: budget,
+      budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
       alreadyBytes: engine.totalBytes
     });
     if (!ok) return false;   // 原生泵没起来（服务没在跑）：别停 JS，继续跑总比停了好
@@ -574,18 +586,32 @@
     engine.stop();           // 停 JS 侧流量，避免两边同时下载同一条线（重复计数、白跑）
     return true;
   }
-  async function takeBackFromNative() {
-    if (!pumpOn) return { pumping: false, bytes: 0 };
-    pumpOn = false;
-    const bytes = await window.SpeedNative.pumpStop();
+
+  // 清算原生泵（只在页面可见时做）：并入字节、刷新「息屏自动接管」授权参数
+  async function maintainNativePump() {
+    if (document.hidden) return;
+    const now = Date.now();
+    if (engine.running && Store.getKeepBg() && engine.url && now - lastArmAt > 30000) {
+      lastArmAt = now;
+      window.SpeedNative.armPump(engine.url, engine.threads, {
+        limitBps: engine.speedLimit,
+        budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
+        alreadyBytes: engine.totalBytes
+      });
+    }
+    if (now - lastPumpSettleAt < 3000) return;
+    lastPumpSettleAt = now;
+    const st = await window.SpeedNative.pumpStats();
+    if (!st.bytes) return;
+    const bytes = await window.SpeedNative.pumpStop();   // 停泵并清零（重复调用不会重复计数）
     if (bytes > 0) {
       pumpTotal += bytes;
       engine.totalBytes += bytes;      // 原生侧后台消耗照常计入总使用量
       engine.sessionBytes += bytes;
+      pumpOn = false;
       persistTotalUse(true);
+      renderMetrics(engine);
     }
-    if (engine.url) engine.start(engine.url, engine.threads);   // 重启 JS 引擎
-    return { pumping: true, bytes: bytes };
   }
 
   // 回到前台 / 切到后台
@@ -607,8 +633,11 @@
     }
     const hiddenMs = hiddenAt > 0 ? Date.now() - hiddenAt : 0;
     bgMs += hiddenMs;
+    const wasPumping = pumpOn;
     engine.resume();                        // 先恢复判定状态（引擎已停则只重置基准，不误判）
-    await takeBackFromNative();             // 再取回原生后台消耗的字节并重启引擎
+    lastPumpSettleAt = 0; lastArmAt = 0;
+    await maintainNativePump();             // 清算原生后台消耗的字节（若有）
+    if (wasPumping && !engine.running && engine.url) engine.start(engine.url, engine.threads);   // 交棒过 → 重启 JS 引擎
     renderMetrics(engine);
     refreshPlayUI();
     // 后台一字节都没消耗 = 系统把整个进程/JS 都冻住了，这不是前端能自救的，必须让用户去改系统设置
