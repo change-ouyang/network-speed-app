@@ -27,6 +27,12 @@ public abstract class Context {
     /** 真实签名：public abstract boolean stopService(Intent service) */
     public abstract boolean stopService(Intent service);
 
+    /** 真实签名：public abstract void startActivity(Intent intent) */
+    public abstract void startActivity(Intent intent);
+
+    /** 真实签名：public abstract String getPackageName() */
+    public abstract String getPackageName();
+
     /** 真实签名：public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) */
     public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter);
 

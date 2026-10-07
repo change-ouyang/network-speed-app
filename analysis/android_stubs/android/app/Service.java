@@ -12,6 +12,14 @@ import android.content.Intent;
  */
 public abstract class Service extends Context {
 
+    /** 真实签名：public final String getPackageName() */
+    public String getPackageName() {
+        return null;
+    }
+
+    /** 真实签名：public final void startActivity(Intent intent) */
+    public void startActivity(Intent intent) {}
+
     public static final int START_STICKY = 1;
     public static final int START_NOT_STICKY = 2;
     public static final int START_REDELIVER_INTENT = 3;

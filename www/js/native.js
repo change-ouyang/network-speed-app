@@ -20,12 +20,32 @@
 
   window.SpeedNative = {
     isNative,
-    // 开启后台测速：启动前台服务（常驻通知 + CPU 唤醒锁）
-    async bgEnable() {
+    // 预请求通知权限（App 启动时一次，避免首次开跑时弹系统对话框打断启动流程）
+    async prepPermissions() {
       if (!isNative()) return false;
       const p = plugin("SpeedService");
-      if (!p) return false;
-      try { await p.enable(); return true; } catch (e) { return false; }
+      if (!p || !p.prepPermissions) return false;
+      try { await p.prepPermissions(); return true; } catch (e) { return false; }
+    },
+    // 电池优化豁免：{exempt:boolean}；ask=true 且未豁免时拉起系统「忽略电池优化」对话框。
+    // 这是 HyperOS 等国产 ROM 冻结后台进程的头号对策，必须在代码里主动申请，光靠提示没用。
+    async batteryExempt(ask) {
+      if (!isNative()) return { exempt: true };
+      const p = plugin("SpeedService");
+      if (!p || !p.batteryExempt) return { exempt: false, error: "原生插件未注册" };
+      try { return await p.batteryExempt({ ask: !!ask }); } catch (e) { return { exempt: false, error: (e && e.message) || String(e) }; }
+    },
+    // 开启后台测速：启动前台服务（常驻通知 + CPU 唤醒锁）。
+    // 返回 {ok, error}：失败必须带上原生侧真实原因（OEM ROM 限制五花八门，笼统提示没法排查）
+    async bgEnable() {
+      if (!isNative()) return { ok: false, error: "非 App 环境（浏览器预览）" };
+      const p = plugin("SpeedService");
+      if (!p || !p.enable) return { ok: false, error: "原生插件未注册" };
+      try {
+        const r = await p.enable();
+        if (r && r.started) return { ok: true, notifGranted: r.notifGranted !== false };
+        return { ok: false, error: (r && r.error) || "未知错误" };
+      } catch (e) { return { ok: false, error: (e && e.message) || String(e) }; }
     },
     // 关闭后台测速：停掉前台服务（未启动时为无害空操作）
     async bgDisable() {

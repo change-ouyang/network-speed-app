@@ -9,6 +9,9 @@ public class ServiceInfo {
 
     public static final int FOREGROUND_SERVICE_TYPE_DATA_SYNC = 1;
 
+    /** FOREGROUND_SERVICE_TYPE_SPECIAL_USE 为 API 34 引入，值 1<<30（与真实 AOSP 一致） */
+    public static final int FOREGROUND_SERVICE_TYPE_SPECIAL_USE = 1073741824;
+
     public String name;
     public String packageName;
     public int flags;

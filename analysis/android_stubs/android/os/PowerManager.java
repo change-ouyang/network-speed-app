@@ -24,6 +24,11 @@ public class PowerManager {
         return false;
     }
 
+    /** 真实签名：public boolean isIgnoringBatteryOptimizations(String packageName) */
+    public boolean isIgnoringBatteryOptimizations(String packageName) {
+        return false;
+    }
+
     /** 桩：android.os.PowerManager.WakeLock（真实为 PowerManager 的内部 public 类）。 */
     public final class WakeLock {
 

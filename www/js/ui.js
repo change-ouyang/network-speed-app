@@ -124,13 +124,31 @@
   // 原生后台泵与后台统计的状态（声明放在使用点之前，避免 TDZ）
   // handedOff：引擎是「被交棒停掉」的（不是用户/自动停止）——回前台必须把它重新跑起来
   let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0, lastArmAt = 0, handedOff = false;
+  // 服务启动失败的真实原因（原生透传，进诊断行，真机排查有据可依）；电池优化豁免状态
+  let lastBgError = "", batteryExempted = true, batteryAsked = false;
   function syncBgService() {
     if ((engine.running || pumpOn) && Store.getKeepBg()) {
       // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
-      window.SpeedNative.bgEnable().then((ok) => {
-        if (!ok && !bgWarned) {
-          bgWarned = true;
-          toast("后台运行服务启动失败：请确认已允许通知权限（部分 ROM 还需允许本应用「后台运行/自启动」）", 4200);
+      window.SpeedNative.bgEnable().then((res) => {
+        if (res && !res.ok) {
+          lastBgError = res.error || "未知错误";
+          if (!bgWarned) {
+            bgWarned = true;
+            toast("后台服务启动失败：" + lastBgError + "。请允许通知权限，并在系统设置里允许「后台运行/自启动」", 6000);
+          }
+        } else {
+          lastBgError = "";
+          if (res && res.notifGranted === false) toast("未授予通知权限：后台将没有常驻通知，部分 ROM 会更容易杀后台", 4200);
+        }
+      });
+      // 电池优化豁免：HyperOS 冻结进程的头号对策。开跑时若未豁免，拉起系统授权对话框
+      //（每次启动最多问一次；用户拒绝后下次启动还会再问，因为这个权限不授，后台大概率白跑）
+      window.SpeedNative.batteryExempt(false).then((r) => {
+        batteryExempted = !!(r && r.exempt);
+        if (!batteryExempted && !batteryAsked) {
+          batteryAsked = true;
+          toast("建议允许「忽略电池优化」，否则息屏后系统可能冻结整个应用", 4200);
+          window.SpeedNative.batteryExempt(true);
         }
       });
       // 登记息屏自动接管参数：万一 WebView 没来得及触发 visibilitychange，原生也能在息屏时接管
@@ -397,17 +415,25 @@
   });
 
   // ---------- 说明 / 公告 ----------
-  // 诊断行：把「重试/失败/后台/交棒」的硬数字摆出来，替代以前那种打扰式弹窗（真机排查也有据可依）
-  function diagLine() {
+  // 诊断行：把「重试/失败/后台/交棒」的硬数字摆出来，替代以前那种打扰式弹窗（真机排查也有据可依）。
+  // 顺带暴露省电豁免状态与最近一次服务启动失败的真实原因——后台问题九成出在这两处。
+  async function diagLine() {
     const s = engine.stat || {};
     const sizeTxt = engine.size > 0 ? window.formatBytes(engine.size, 1) : "未知";
     const modeTxt = engine.mode === "chunk" ? "Range 分块" : "整包";
+    let envTxt = "";
+    try {
+      const bat = await window.SpeedNative.batteryExempt(false);
+      if (bat && bat.exempt === false) envTxt += "；省电豁免：未开启（后台易被系统冻结）";
+    } catch (e) {}
+    if (lastBgError) envTxt += "；最近服务启动失败：" + lastBgError;
     return "<p class='muted'><b>本次诊断</b>：请求 " + (s.req || 0) + " 次（成功 " + (s.ok || 0) +
       "、越界 416 " + (s.s416 || 0) + "、限流 429 " + (s.s429 || 0) + "、其它 4xx " + (s.s4xx || 0) +
       "、5xx " + (s.s5xx || 0) + "）；超时 " + (s.timeout || 0) + "、网络错误 " + (s.netErr || 0) +
       "、重建连接 " + (engine._revives || 0) + " 次；策略 " + modeTxt + "（文件 " + sizeTxt + "）" +
       "；进入后台 " + bgCount + " 次共 " + Math.round(bgMs / 1000) + " 秒" +
-      (pumpTotal > 0 ? "，其中原生后台泵消耗 " + window.formatBytes(pumpTotal, 1) : "") + "。</p>";
+      (pumpTotal > 0 ? "，其中原生后台泵消耗 " + window.formatBytes(pumpTotal, 1) : "") +
+      envTxt + "。</p>";
   }
 
   $("btnAbout").addEventListener("click", async () => {
@@ -423,7 +449,7 @@
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
       "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
       "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
-      diagLine() +
+      (await diagLine()) +
       verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
@@ -562,6 +588,8 @@
   loadGeo(false);
   if (!Store.get(Store.K.acknowledged, "")) showNotice();
   refreshPlayUI();
+  // 启动时就预请求通知权限（Android 13+ 运行时授权）：别等用户点「开始」时才弹系统对话框打断操作
+  window.SpeedNative.prepPermissions();
 
   // 页面是「被系统回收后重载」时（不是正常前后台切换），上一轮的一切都已失效：
   // 必须清掉原生泵授权并把前台服务停掉，否则原生泵会在无人看管的情况下一直消耗流量。

@@ -5,6 +5,7 @@ public class Intent {
 
     public static final int FLAG_ACTIVITY_SINGLE_TOP = 0x20000000;
     public static final int FLAG_ACTIVITY_CLEAR_TOP = 0x04000000;
+    public static final int FLAG_ACTIVITY_NEW_TASK = 0x10000000;
 
     /** 真实取值：android.intent.action.SCREEN_OFF */
     public static final String ACTION_SCREEN_OFF = "android.intent.action.SCREEN_OFF";
@@ -17,12 +18,20 @@ public class Intent {
 
     public Intent(String action) {}
 
+    /** 真实签名：public Intent(String action, android.net.Uri uri) */
+    public Intent(String action, android.net.Uri uri) {}
+
     /** 真实签名：public String getAction() */
     public String getAction() {
         return null;
     }
 
     public Intent setFlags(int flags) {
+        return this;
+    }
+
+    /** 真实签名：public Intent addFlags(int flags) */
+    public Intent addFlags(int flags) {
         return this;
     }
 

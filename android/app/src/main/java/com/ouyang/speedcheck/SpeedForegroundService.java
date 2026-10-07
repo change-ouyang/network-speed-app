@@ -76,6 +76,7 @@ public class SpeedForegroundService extends Service {
         } catch (Throwable t) {
             // Android 12+ 在后台调用 startForegroundService 会抛 ForegroundServiceStartNotAllowedException：
             // 绝不能让它崩掉整个进程，停掉自己，等下次在前台时再启动
+            android.util.Log.w("SpeedFgService", "startForeground failed: " + t, t);
             instance = null;
             stopSelf();
             return START_NOT_STICKY;
@@ -148,7 +149,11 @@ public class SpeedForegroundService extends Service {
 
     @SuppressWarnings("deprecation")
     private void startInForeground(Notification notification) {
-        if (Build.VERSION.SDK_INT >= 29) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Android 15+（targetSdk 35）对 dataSync 型有 6 小时/日上限，specialUse 无时限；
+            // 两类都必须在 manifest 里声明（dataSync|specialUse），按系统版本选其一
+            startForeground(NOTIFY_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFY_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIFY_ID, notification);

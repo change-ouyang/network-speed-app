@@ -30,8 +30,13 @@
 
         <service
             android:name=".SpeedForegroundService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false" />
+            android:foregroundServiceType="dataSync|specialUse"
+            android:exported="false">
+            <!-- specialUse：Android 15+ 对 dataSync 型前台服务有 6 小时/日上限，本应用是用户主动发起的持续联网测试，不能被系统掐断 -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated continuous network throughput and data-consumption testing" />
+        </service>
     </application>
 
     <!-- Permissions -->
@@ -39,6 +44,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

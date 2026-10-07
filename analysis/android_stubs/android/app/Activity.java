@@ -27,6 +27,14 @@ public class Activity extends Context {
 
     public void setContentView(int layoutResID) {}
 
+    /** 真实签名：public String getPackageName() */
+    public String getPackageName() {
+        return null;
+    }
+
+    /** 真实签名：public void startActivity(Intent intent) */
+    public void startActivity(Intent intent) {}
+
     public Context getApplicationContext() {
         return this;
     }

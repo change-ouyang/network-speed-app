@@ -96,8 +96,10 @@ function makeHarness() {
     pumpRunning: false,
     pumpBytes: 0,          // 假原生泵「已消耗未领走」的字节
     deferStart: null,      // 设为 Promise 的 resolve 可延迟 pumpStart 完成（用于竞态测试）
-    bgEnable: async () => { native.calls.push("bgEnable"); return true; },
+    bgEnable: async () => { native.calls.push("bgEnable"); return { ok: true }; },   // 新形状：{ok, error}
     bgDisable: async () => { native.calls.push("bgDisable"); return true; },
+    prepPermissions: async () => { native.calls.push("prepPermissions"); return true; },
+    batteryExempt: async (ask) => { native.calls.push("batteryExempt" + (ask ? ":ask" : "")); return { exempt: true }; },
     pumpStart: async (url, threads) => {
       native.calls.push("pumpStart");
       if (native.deferStart) { await new Promise((r) => { native.deferStart = r; }); }
