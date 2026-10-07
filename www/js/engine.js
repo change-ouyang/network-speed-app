@@ -39,9 +39,11 @@
       // ---- 传输策略（可观测，便于排查）----
       this.size = 0;            // 已知文件大小，0 = 未知
       this.mode = "whole";      // whole = 整包循环下载；chunk = Range 分块
+      // ---- 诊断计数（只统计、不参与流程判断；「说明」页展示，便于真机排查）----
+      this.stat = { req: 0, ok: 0, s416: 0, s4xx: 0, s5xx: 0, s429: 0, timeout: 0, abort: 0, netErr: 0 };
       // ---- 内部 ----
       this._workers = [];
-      this._offsets = [];
+      this._seq = 0;            // 分块序号（全局递增，保证各线程取到不同分块）
       this._epoch = 0;          // worker 世代：stop/自愈后旧的立即失效
       this._controllers = new Set();
       this._timer = null;
@@ -93,17 +95,24 @@
       const ctrl = new AbortController();
       this._controllers.add(ctrl);
       // 只要还在收到字节就不断续期；只有真正「零字节」才判超时
-      let idle = setTimeout(() => ctrl.abort(), IDLE_TIMEOUT);
-      const bump = () => { clearTimeout(idle); idle = setTimeout(() => ctrl.abort(), IDLE_TIMEOUT); };
-      const hard = setTimeout(() => ctrl.abort(), HARD_TIMEOUT);
+      let timedOut = false;
+      let idle = setTimeout(() => { timedOut = true; ctrl.abort(); }, IDLE_TIMEOUT);
+      const bump = () => { clearTimeout(idle); idle = setTimeout(() => { timedOut = true; ctrl.abort(); }, IDLE_TIMEOUT); };
+      const hard = setTimeout(() => { timedOut = true; ctrl.abort(); }, HARD_TIMEOUT);
+      this.stat.req++;
       try {
         const resp = await fetch(this.url, { headers, cache: "no-store", signal: ctrl.signal });
         const status = resp.status;
         if (!resp.ok && status !== 206) {
+          if (status === 416) this.stat.s416++;
+          else if (status === 429) { this.stat.s429++; this.stat.s4xx++; }
+          else if (status >= 500) this.stat.s5xx++;
+          else if (status >= 400) this.stat.s4xx++;
           const err = new Error("HTTP " + status);
           err.status = status;
           throw err;
         }
+        this.stat.ok++;
         const cr = resp.headers.get("content-range");
         let total = 0;
         if (cr) {
@@ -132,10 +141,13 @@
         return { status, bytes: n, total };
       } catch (e) {
         if (e && e.name === "AbortError") {
-          const err = new Error(this.running ? "响应超时" : "已停止");
+          if (timedOut) this.stat.timeout++; else this.stat.abort++;
+          const err = new Error(timedOut ? "响应超时" : (this.running ? "连接被重建" : "已停止"));
           err.aborted = true;
+          err.kind = timedOut ? "timeout" : "abort";
           throw err;
         }
+        if (!e || !e.status) this.stat.netErr++;
         throw e;
       } finally {
         clearTimeout(idle);
@@ -144,18 +156,27 @@
       }
     }
 
-    // 探测结论：只有「206 + Content-Range 给出可信总大小 + 大小 > CHUNK」才值得分块
+    // 探测结论：只有「206 + 总大小可信 + 文件大到每个线程都能分到独立分块」才值得分块。
+    // 反例（重要）：主人的咕咪快游2 只有 3.9MiB，而线程开到 32 —— 分块数(4) 远少于线程数(32)，
+    // 32 个线程只会反复并发请求同一段，既白跑又极易招 CDN 限流；这种小文件用整包/循环下载
+    // （与网页版完全一致）才是最优解。
     _applyProbe(r) {
       this._rangeProbed = true;
-      if (r.status === 206 && r.total > CHUNK) {
+      if (r.status === 206 && r.total > 0) {
         this.size = r.total;
-        this.mode = "chunk";
-        this._offsets = this._offsets.map(() => 0);
+        this._recheckMode();
       } else {
-        // 小文件 / 总大小不可信 / 服务端忽略 Range：整包最稳，与网页版一致
-        this.size = r.status === 206 ? r.total : 0;
+        // 服务端忽略 Range / 总大小不可信：整包最稳
+        this.size = 0;
         this.mode = "whole";
       }
+    }
+
+    // 分块 or 整包：分块数 ≥ 线程数才分块（每个线程都有独立区段可下），否则整包循环
+    _recheckMode() {
+      const canChunk = this.size > CHUNK && Math.floor(this.size / CHUNK) >= this.threads;
+      this.mode = canChunk ? "chunk" : "whole";
+      this._seq = 0;
     }
 
     async _worker(id, epoch) {
@@ -172,9 +193,12 @@
         let off = null;
         let isProbe = false;
         if (this.mode === "chunk" && this.size > CHUNK) {
-          // 严格取模：偏移永远落在文件内，不会产生越界请求
-          off = (this._offsets[id] || 0) % this.size;
-          this._offsets[id] = (off + CHUNK * this.threads) % this.size;
+          // 全局递增的分块序号 → 相邻线程取相邻分块：各线程覆盖不同区段，
+          // 不会出现「8 个线程重复请求同一段」（重复请求容易招 CDN 限流，也白跑同一份数据）
+          const chunks = Math.max(1, Math.ceil(this.size / CHUNK));
+          const idx = this._seq % chunks;
+          this._seq = (this._seq + 1) % chunks;
+          off = idx * CHUNK;   // idx < ceil(size/CHUNK) ⇒ off < size，永不越界
         } else if (!this._rangeProbed && !this._probeInFlight && id === 0) {
           isProbe = true;      // 每个会话只探测一次，且只占 0 号线程
           this._probeInFlight = true;
@@ -189,9 +213,9 @@
             this._probeInFlight = false;
             this._applyProbe(r);
           } else if (this.mode === "chunk" && r.total && r.total !== this.size) {
-            // 直播切片等文件大小会变：立即重新对齐偏移，避免越界
+            // 直播切片等文件大小会变：立即重新对齐分块序号，避免越界
             this.size = r.total;
-            this._offsets = this._offsets.map(() => 0);
+            this._seq = 0;
           }
           this._rejStreak = 0;
           if (fails > 0) {
@@ -214,16 +238,21 @@
             this.mode = "whole";
             this.size = 0;
           }
+          if (status === 429) {
+            // 被限流：不是节点坏了，而是请求太快 —— 退让更久，且不算失败、不报错
+            await sleep(3000 + Math.random() * 3000);
+            continue;
+          }
           if (status === 416 || (off != null && off > 0 && status >= 400 && status < 500)) {
             // 偏移类响应（越界/防盗链拒绝）：回卷重来，不计失败、不打扰用户
-            this._offsets[id] = 0;
+            this._seq = 0;
             continue;
           }
           if (status >= 400 && status < 500) {
             // 其它 4xx：很可能这个节点不欢迎 Range —— 退回整包口径（网页版行为）
             this._rangeProbed = true;
             this.mode = "whole";
-            this._offsets[id] = 0;
+            this._seq = 0;
           }
           // 真正的「拒绝访问」：仅在整包请求上、连续多次、且期间零字节时才判定节点拒绝
           const hardReject = off == null && (status === 401 || status === 403 || status === 410);
@@ -235,10 +264,22 @@
             }
           }
           fails++;
-          if (this._onError) this._onError({ msg: e && e.message ? e.message : String(e), consecutive: fails });
-          // 指数退避 + 抖动（按本 worker 的失败次数，不牵连其它线程）
-          const backoff = Math.min(6000, 800 * Math.pow(2, Math.min(3, fails)));
-          await sleep(backoff * (0.7 + Math.random() * 0.6));
+          // 错误事件只用于内部诊断计数（UI 不再弹提示：流式下载里瞬时失败是常态且已自动退避重试）
+          if (this._onError) {
+            this._onError({
+              msg: e && e.message ? e.message : String(e),
+              kind: e && e.kind ? e.kind : (status ? "http" : "net"),
+              status: status || 0,
+              consecutive: fails,
+            });
+          }
+          // 退避策略：近期有字节到达（说明节点是活的，只是偶发抖动/限流）→ 快速重试，别白白空等；
+          // 完全收不到数据（可能真的不行了）→ 指数退避 + 抖动，避免把节点打死
+          const recent = Date.now() - this._lastProgressAt < 3000;
+          const backoff = recent
+            ? 250 + Math.random() * 450
+            : Math.min(6000, 800 * Math.pow(2, Math.min(3, fails)));
+          await sleep(backoff);
         }
       }
     }
@@ -259,7 +300,7 @@
       }
       this._controllers.clear();
       this._probeInFlight = false;
-      this._offsets = new Array(this.threads).fill(0);
+      this._seq = 0;
       this._spawn(this._epoch);
     }
 
@@ -325,7 +366,8 @@
       this._rangeProbed = false;
       this._probeInFlight = false;
       this._rejStreak = 0;
-      this._offsets = new Array(this.threads).fill(0);
+      this._seq = 0;
+      this._suspended = false;   // 新的测试按「页面可见」起步，判定立即生效
       this._epoch++;
       // 连续测试：不清零 totalBytes（对齐原站「总使用量」跨启动累计），仅重置速率窗口与停滞状态
       if (!this.sessionStart) this.sessionStart = Date.now();
@@ -345,23 +387,29 @@
       this.mode = "whole";
       this._rangeProbed = false;
       this._probeInFlight = false;
-      this._offsets = this._offsets.map(() => 0);
+      this._seq = 0;
+      // 换节点 = 换上下文：诊断计数重新累计（start/stop 之间不清，方便看整个节点的连续表现）
+      this.stat = { req: 0, ok: 0, s416: 0, s4xx: 0, s5xx: 0, s429: 0, timeout: 0, abort: 0, netErr: 0 };
     }
 
     setThreads(n) {
       n = Math.max(1, Math.min(32, n | 0));
-      if (!this.running) { this.threads = n; return; }
+      if (!this.running) {
+        this.threads = n;
+        if (this._rangeProbed) this._recheckMode();   // 线程数变了，分块/整包的取舍要重新判一次
+        return;
+      }
       if (n > this.threads) {
         const from = this.threads;
         this.threads = n;
         for (let i = from; i < n; i++) {
-          this._offsets[i] = 0;
           this._workers.push(this._worker(i, this._epoch).catch(() => {}));
         }
       } else {
+        // shrink：多余 worker 在循环开头按 id >= threads 自行退出；分块序号是全局共享的，无需逐个重置
         this.threads = n;
-        this._offsets.length = n;   // 多余 worker 在循环开头按 id >= threads 自行退出
       }
+      if (this._rangeProbed) this._recheckMode();
     }
 
     stop() {

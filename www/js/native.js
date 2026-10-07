@@ -34,6 +34,46 @@
       if (!p) return false;
       try { await p.disable(); return true; } catch (e) { return false; }
     },
+    // ---- 后台泵：切后台/息屏时把下载交给前台服务的原生线程（此时 WebView 的 JS 会被系统冻结）----
+    // 数值一律转成字符串传过去（原生侧用 getString 读取），避免依赖插件调用的数字取值 API。
+    async pumpStart(url, threads, opts) {
+      if (!isNative()) return false;
+      const p = plugin("SpeedService");
+      if (!p || !p.pumpStart) return false;
+      const o = opts || {};
+      try {
+        const r = await p.pumpStart({
+          url: String(url || ""),
+          threads: String(Math.max(1, Math.min(32, threads | 0))),
+          limitBps: String(Math.max(0, Math.round(o.limitBps || 0))),
+          budgetBytes: String(Math.max(0, Math.round(o.budgetBytes || 0))),
+          alreadyBytes: String(Math.max(0, Math.round(o.alreadyBytes || 0)))
+        });
+        return !!(r && r.started);
+      } catch (e) { return false; }
+    },
+    // 停止后台泵并返回本轮原生侧消耗的字节（失败按 0 计，不回退污染总用量）
+    async pumpStop() {
+      if (!isNative()) return 0;
+      const p = plugin("SpeedService");
+      if (!p || !p.pumpStop) return 0;
+      try {
+        const r = await p.pumpStop();
+        const n = r && r.bytes != null ? Number(r.bytes) : 0;
+        return isFinite(n) && n > 0 ? n : 0;
+      } catch (e) { return 0; }
+    },
+    // 查询后台泵状态 {running, bytes}（浏览器预览返回未运行）
+    async pumpStats() {
+      if (!isNative()) return { running: false, bytes: 0 };
+      const p = plugin("SpeedService");
+      if (!p || !p.pumpStats) return { running: false, bytes: 0 };
+      try {
+        const r = await p.pumpStats();
+        const n = r && r.bytes != null ? Number(r.bytes) : 0;
+        return { running: !!(r && r.running), bytes: isFinite(n) && n > 0 ? n : 0 };
+      } catch (e) { return { running: false, bytes: 0 }; }
+    },
     // 退出应用：只结束当前 Activity；已开启的前台服务/后台测速不受影响
     async exitApp() {
       const p = plugin("App");

@@ -119,10 +119,12 @@
   });
   $("swAuto").addEventListener("change", (e) => Store.set(Store.K.autoStart, e.target.checked));
 
-  // 后台运行 = 前台服务（测试中且开关开启时挂常驻服务，其余时候停掉）
+  // 后台运行 = 前台服务（测试中/原生后台泵在跑 且 开关开启时挂常驻服务，其余时候停掉）
   let bgWarned = false, bgHinted = false;
+  // 原生后台泵与后台统计的状态（声明放在使用点之前，避免 TDZ）
+  let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0;
   function syncBgService() {
-    if (engine.running && Store.getKeepBg()) {
+    if ((engine.running || pumpOn) && Store.getKeepBg()) {
       // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
       window.SpeedNative.bgEnable().then((ok) => {
         if (!ok && !bgWarned) {
@@ -173,22 +175,12 @@
     refreshPlayUI();
     syncBgService();
   });
-  let lastWarnToast = 0, lastInfoToast = 0;
+  // 失败提示原则：流式下载里瞬时失败是常态，引擎已自动退避重试并保持消耗；
+  // 把重试细节弹给用户只会制造焦虑（用户明确反馈过「这提示有必要吗」——没必要）。
+  // 只保留「长时间收不到数据」（stall）与「自动停止」两类真正需要用户动作的提示；
+  // 失败次数照常统计，可在「说明」页的诊断行里查看。
   engine.on("error", (e) => {
-    console.warn("[speedtest]", e.msg, "consecutive:", e.consecutive);
-    const now = Date.now();
-    const node = currentNode ? "「" + currentNode.label + "」" : "";
-    if (e.consecutive >= 3) {
-      // 连续失败：说明不是偶发抖动，明确提示且降低打扰频率
-      if (now - lastWarnToast > 15000) {
-        lastWarnToast = now;
-        toast(node + "连接不稳定（" + e.msg + "），已自动重试；建议更换节点或降低线程数", 3200);
-      }
-    } else if (now - lastInfoToast > 30000) {
-      // 偶发失败：静默重试即可，最多轻描淡写提一次
-      lastInfoToast = now;
-      toast("个别请求失败，已自动重试", 1800);
-    }
+    console.warn("[speedtest]", e.msg, "kind:", e.kind, "consecutive:", e.consecutive);
   });
   engine.on("recover", () => {}); // 成功请求会把失败计数清零，无需打扰
   engine.on("stall", () => {
@@ -391,6 +383,19 @@
   });
 
   // ---------- 说明 / 公告 ----------
+  // 诊断行：把「重试/失败/后台/交棒」的硬数字摆出来，替代以前那种打扰式弹窗（真机排查也有据可依）
+  function diagLine() {
+    const s = engine.stat || {};
+    const sizeTxt = engine.size > 0 ? window.formatBytes(engine.size, 1) : "未知";
+    const modeTxt = engine.mode === "chunk" ? "Range 分块" : "整包";
+    return "<p class='muted'><b>本次诊断</b>：请求 " + (s.req || 0) + " 次（成功 " + (s.ok || 0) +
+      "、越界 416 " + (s.s416 || 0) + "、限流 429 " + (s.s429 || 0) + "、其它 4xx " + (s.s4xx || 0) +
+      "、5xx " + (s.s5xx || 0) + "）；超时 " + (s.timeout || 0) + "、网络错误 " + (s.netErr || 0) +
+      "、重建连接 " + (engine._revives || 0) + " 次；策略 " + modeTxt + "（文件 " + sizeTxt + "）" +
+      "；进入后台 " + bgCount + " 次共 " + Math.round(bgMs / 1000) + " 秒" +
+      (pumpTotal > 0 ? "，其中原生后台泵消耗 " + window.formatBytes(pumpTotal, 1) : "") + "。</p>";
+  }
+
   $("btnAbout").addEventListener("click", async () => {
     const info = await window.SpeedNative.getInfo();
     const verLine = info
@@ -399,14 +404,25 @@
     openModal("使用说明",
       "<p><b>关于本页</b></p>" +
       "<p>1、本应用为「流量消耗器」（原「网络速度」）安卓端：多线程循环下载真实公开文件消耗流量并测速，实时显示总使用量、速度与带宽峰值；</p>" +
-      "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；部分国产 ROM 需在系统设置中允许本应用「后台运行/自启动」并把省电策略设为无限制；</p>" +
+      "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；切到后台/息屏后，下载会<b>交棒给前台服务的原生线程</b>（WebView 的 JS 在息屏时会被系统冻结）。部分国产 ROM（如小米 HyperOS）还需在系统设置中允许本应用「后台运行/自启动」、把省电策略设为「无限制」并锁定后台，否则系统会冻结整个进程；</p>" +
       "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
       "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
-      "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止。</p>" +
+      "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
+      diagLine() +
       verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
+
+  // 退出前先收干净：停掉测试、停掉原生后台泵、停掉前台服务
+  // （否则原生泵会在服务里一直消耗流量，用户却已经看不到任何控制入口）
+  async function shutdownBeforeExit() {
+    try {
+      engine.stop();
+      if (pumpOn) { await window.SpeedNative.pumpStop(); pumpOn = false; }
+      await window.SpeedNative.bgDisable();
+    } catch (e) {}
+  }
 
   function showNotice() {
     openModal("公告",
@@ -417,6 +433,7 @@
       [
         {
           text: "退出使用", cls: "danger", fn: async () => {
+            await shutdownBeforeExit();
             const done = await window.SpeedNative.exitApp();
             if (!done) { closeModal(); toast("浏览器预览无法退出，请直接关闭页面"); }
           }
@@ -542,33 +559,62 @@
     }, 600);
   }
 
+  // ---- 后台交棒：WebView 的 JS 在切后台/息屏后会被系统冻结（真机实测：页面未重载但数字停住），
+  //      此时只有前台服务的原生线程还能继续消耗流量。故：切后台 → 交棒给原生泵；回前台 → 取回字节数并重启引擎。
+  async function handOffToNative() {
+    if (!engine.running || !Store.getKeepBg() || !engine.url) return false;
+    const budget = engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0;
+    const ok = await window.SpeedNative.pumpStart(engine.url, engine.threads, {
+      limitBps: engine.speedLimit,
+      budgetBytes: budget,
+      alreadyBytes: engine.totalBytes
+    });
+    if (!ok) return false;   // 原生泵没起来（服务没在跑）：别停 JS，继续跑总比停了好
+    pumpOn = true;
+    engine.stop();           // 停 JS 侧流量，避免两边同时下载同一条线（重复计数、白跑）
+    return true;
+  }
+  async function takeBackFromNative() {
+    if (!pumpOn) return { pumping: false, bytes: 0 };
+    pumpOn = false;
+    const bytes = await window.SpeedNative.pumpStop();
+    if (bytes > 0) {
+      pumpTotal += bytes;
+      engine.totalBytes += bytes;      // 原生侧后台消耗照常计入总使用量
+      engine.sessionBytes += bytes;
+      persistTotalUse(true);
+    }
+    if (engine.url) engine.start(engine.url, engine.threads);   // 重启 JS 引擎
+    return { pumping: true, bytes: bytes };
+  }
+
   // 回到前台 / 切到后台
   let hiddenAt = 0, hiddenBytes = 0, bgFreezeWarned = false;
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
       hiddenAt = Date.now();
       hiddenBytes = engine.totalBytes;
       // 后台期间冻结「停滞/死亡」判定：否则解冻后过期的 1 秒定时器会把冻结时长误判成节点无响应
       engine.suspend();
-      // 没开「保持后台运行」时系统可能冻结 WebView，测速会被暂停 —— 只提醒一次，别反复打扰
-      if (engine.running && !Store.getKeepBg() && !bgHinted) {
+      if (engine.running) bgCount++;
+      const handed = await handOffToNative();
+      // 没开「保持后台运行」时系统会冻结 WebView，测速会被暂停 —— 只提醒一次，别反复打扰
+      if (!handed && engine.running && !Store.getKeepBg() && !bgHinted) {
         bgHinted = true;
-        toast("未开启「保持后台运行」：切到后台后测速可能被系统暂停", 4200);
+        toast("未开启「保持后台运行」：切到后台后测速会被系统暂停", 4200);
       }
       return;
     }
-    if (engine.running) {
-      const hiddenMs = Date.now() - hiddenAt;
-      // 后台一字节都没消耗 = 系统把后台 JS/网络冻住了：这不是引擎能自救的，必须让用户去改系统设置
-      const froze = hiddenAt > 0 && hiddenMs > 20000 && engine.totalBytes === hiddenBytes;
-      engine.resume();   // 内含：重置进度基准 + 重建全部 worker（回前台不必等看门狗）
-      renderMetrics(engine);
-      if (froze && !bgFreezeWarned) {
-        bgFreezeWarned = true;
-        toast("后台期间没有消耗流量：系统可能冻结了本应用，请允许「后台运行/自启动」并把省电策略设为无限制", 5000);
-      }
-    } else {
-      engine.resume();   // 未在测速也要恢复判定状态
+    const hiddenMs = hiddenAt > 0 ? Date.now() - hiddenAt : 0;
+    bgMs += hiddenMs;
+    engine.resume();                        // 先恢复判定状态（引擎已停则只重置基准，不误判）
+    await takeBackFromNative();             // 再取回原生后台消耗的字节并重启引擎
+    renderMetrics(engine);
+    refreshPlayUI();
+    // 后台一字节都没消耗 = 系统把整个进程/JS 都冻住了，这不是前端能自救的，必须让用户去改系统设置
+    if (hiddenMs > 20000 && engine.totalBytes === hiddenBytes && !bgFreezeWarned) {
+      bgFreezeWarned = true;
+      toast("后台期间没有消耗流量：请在系统设置中允许「后台运行/自启动」、省电策略设为无限制，并锁定后台", 5200);
     }
     syncBgService();   // 回前台重申一次前台服务，防止被系统回收后一直没恢复
   });
@@ -584,9 +630,10 @@
     if ($("sel").classList.contains("open")) { toggleSelect(false); return true; }
     return false;
   }
-  window.SpeedNative.onBack(() => {
+  window.SpeedNative.onBack(async () => {
     if (closeTopLayer()) return;    // 有关闭动作：拦截返回
-    window.SpeedNative.exitApp();   // 无浮层：退出应用
+    await shutdownBeforeExit();     // 无浮层：先停测试/后台泵/前台服务，再退出
+    window.SpeedNative.exitApp();
   });
 
   // 防双击缩放（对齐原站）

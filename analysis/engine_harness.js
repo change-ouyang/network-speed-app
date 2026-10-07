@@ -168,8 +168,10 @@ function makeCdn(cfg, stats) {
     const stall = !!(cfg.stallEvery && stats.requests % cfg.stallEvery === 0);
 
     if (cfg.failRate && Math.random() < cfg.failRate) {
-      stats.http5xx++;
-      return makeResp(500, 0, null, signal, false);
+      const st = cfg.failStatus || 500;
+      if (st === 429) stats.http429 = (stats.http429 || 0) + 1;
+      else stats.http5xx++;
+      return makeResp(st, 0, null, signal, false);
     }
 
     let wantStart = null;
@@ -297,6 +299,56 @@ const SCENARIOS = [
     cfg: { size: 4 * 1024 * 1024, bps: 1024 * 1024, mode: "honor", contentRange: true, bgAt: 15000, bgFor: 50000, bgPolicy: "freeze", bgSyncTick: true },
     seconds: 80,
   },
+  {
+    // 形状取自 2026-10-06 对真实节点的实测：咕咪快游2 = gcache.migu.cn 的 3.9MiB .ts 切片，
+    // 支持 Range（206 + Content-Range 给出总大小 4065312），越界返回标准 416
+    name: "S14 真实咕咪快游2(3.9MiB)+4G",
+    note: "文件 > 1MiB 且总大小已知：复现用户节点在手机 4G(~2MB/s) 下的表现",
+    cfg: { size: 4065312, bps: 2 * 1024 * 1024, mode: "honor", contentRange: true },
+    seconds: 60,
+  },
+  {
+    name: "S15 真实咕咪快游2+弱网",
+    note: "同节点但只有 300KB/s：1MiB 分块需 3.5 秒、整包需 13 秒",
+    cfg: { size: 4065312, bps: 300 * 1024, mode: "honor", contentRange: true },
+    seconds: 60,
+  },
+  {
+    name: "S16 真实节点+15% 服务器 500",
+    note: "移动网络常见的瞬时 5xx：旧版会持续刷「连接不稳定」（用户实测就是这种）",
+    cfg: { size: 4065312, bps: 2 * 1024 * 1024, mode: "honor", contentRange: true, failRate: 0.15 },
+    seconds: 60,
+  },
+  {
+    name: "S17 真实节点+20% 限流 429",
+    note: "CDN 限流：必须退让后继续消耗，绝不能停测",
+    cfg: { size: 4065312, bps: 2 * 1024 * 1024, mode: "honor", contentRange: true, failRate: 0.2, failStatus: 429 },
+    seconds: 60,
+  },
+  {
+    name: "S18 咕咪快游2 + 32 线程",
+    note: "主人的真实配置：3.9MiB 小切片配 32 线程（分块数 4 < 32，按新规则应走整包）",
+    cfg: { size: 4065312, bps: 2 * 1024 * 1024, mode: "honor", contentRange: true, threads: 32 },
+    seconds: 60,
+  },
+  {
+    name: "S19 咕咪快游2+32线程+15% 500",
+    note: "主人配置叠加剧烈抖动：必须继续消耗且零可见提示",
+    cfg: { size: 4065312, bps: 2 * 1024 * 1024, mode: "honor", contentRange: true, threads: 32, failRate: 0.15 },
+    seconds: 60,
+  },
+  {
+    name: "S20 大文件(38.9MiB)+32 线程",
+    note: "爱奇艺式大文件：分块数 38 ≥ 32，应走分块且互不重叠",
+    cfg: { size: 40777819, bps: 8 * 1024 * 1024, mode: "honor", contentRange: true, threads: 32 },
+    seconds: 60,
+  },
+  {
+    name: "S21 大文件+32线程+20% 429",
+    note: "大文件 + 32 线程 + 限流：最容易被打成「节点拒绝」的组合",
+    cfg: { size: 40777819, bps: 8 * 1024 * 1024, mode: "honor", contentRange: true, threads: 32, failRate: 0.2, failStatus: 429 },
+    seconds: 60,
+  },
 ];
 
 // ---------------- 运行与统计 ----------------
@@ -317,18 +369,14 @@ async function runScenario(sc, EngineClass) {
     errCount++;
     const key = String(e.msg).replace(/\d+/g, "N");
     errMsgs.set(key, (errMsgs.get(key) || 0) + 1);
-    // 复刻 ui.js 的提示节流逻辑（15s 严重提示 / 30s 轻提示）
-    if (e.consecutive >= 3) {
-      if (vnow - ui.lastWarn >= 15000) { ui.lastWarn = vnow; ui.warnToasts++; }
-    } else if (vnow - ui.lastInfo >= 30000) {
-      ui.lastInfo = vnow; ui.infoToasts++;
-    }
+    // 对齐 ui.js 现行策略：瞬时失败一律静默重试、不弹任何提示（用户明确反馈不需要），故此处不产生 toast
   });
   eng.on("stop", (reason) => ui.stopToasts.push(reason));
   eng.on("stall", () => ui.stalls++);
 
   eng.maxUse = sc.cfg.maxUse || 0;
   eng.speedLimit = 0;
+  const THREADS = sc.cfg.threads || 8;
   if (process.env.HARNESS_DEBUG && sc.cfg.bgAt) {
     const realTick = eng._tick.bind(eng);
     eng._tick = () => {
@@ -337,7 +385,7 @@ async function runScenario(sc, EngineClass) {
       realTick();
     };
   }
-  eng.start("https://mock.test/file.bin", 8);
+  eng.start("https://mock.test/file.bin", THREADS);
 
   const total = sc.seconds * 1000;
   const bgAt = sc.cfg.bgAt || 0;
@@ -416,6 +464,8 @@ async function runScenario(sc, EngineClass) {
     stalls: ui.stalls,
     stillRunning: running,
     histLen,
+    threads: THREADS,
+    mode: eng.mode,
     midMb: midBytes / 1048576,
     bgBytes: bgBytes / 1048576,
     bgHist,
@@ -441,10 +491,10 @@ async function runScenario(sc, EngineClass) {
     const r = await runScenario(sc, EngineClass);
     rows.push(r);
     console.log("─".repeat(96));
-    console.log(`${r.name}\n  说明：${r.note}｜时长 ${r.seconds}s｜平均 ${r.ackMbps.toFixed(2)} Mbps｜峰值 ${r.peakMbps.toFixed(2)} Mbps｜计入用量 ${r.mb.toFixed(1)} MiB`);
+    console.log(`${r.name}\n  说明：${r.note}｜时长 ${r.seconds}s｜${r.threads} 线程｜策略 ${r.mode === "chunk" ? "Range 分块" : "整包"}｜平均 ${r.ackMbps.toFixed(2)} Mbps｜峰值 ${r.peakMbps.toFixed(2)} Mbps｜计入用量 ${r.mb.toFixed(1)} MiB`);
     console.log(`  请求 ${r.requests} 次（2xx ${r.okRate.toFixed(1)}%，403 ${r.http403}，416 ${r.http416}，5xx ${r.http5xx}，浪费 ${r.waste}%）`);
     console.log(`  报错 ${r.errors} 次 [${r.errMsgs || "无"}]`);
-    console.log(`  UI 提示：连接不稳定 ${r.warnToasts} 次、个别请求失败 ${r.infoToasts} 次、停滞提示 ${r.stalls} 次`);
+    console.log(`  UI 提示：连接不稳定 ${r.warnToasts} 次、个别请求失败 ${r.infoToasts} 次、停滞提示 ${r.stalls} 次（现行策略下前两类恒为 0）`);
     console.log(`  被自动终止：${r.stops}｜运行中：${r.stillRunning ? "是" : "否"}｜速率采样点 ${r.histLen}｜半程用量 ${r.midMb.toFixed(1)} MiB｜本次实耗 ${r.sessionMb.toFixed(1)} MiB`);
     if (sc.cfg.bgAt) {
       console.log(`  后台实测（${sc.cfg.bgPolicy}）：后台期间消耗 ${r.bgBytes.toFixed(1)} MiB、画面刷新 ${r.bgHist} 次｜回前台 10s 内消耗 ${r.postMb.toFixed(1)} MiB｜恢复时误停 ${r.resumeStop} 次、报错 ${r.resumeErr} 次`);
