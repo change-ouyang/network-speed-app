@@ -182,6 +182,10 @@
 
 ## 5. 通用验收流程
 
+> `analysis/` 默认不入库（`.gitignore` 第 7 行），但下列四个文件是文档点名的验收工具，已用 `git add -f` 显式入库：
+> `engine_harness.js`（回归测试台）、`engine_v1_baseline.js` / `engine_v2a_nosuspend.js`（对比基线）、`res_audit.js`（资源自检）。
+> 其余 `analysis/` 内容（节点抓包、本地预览脚本等）仍是本地临时区，改动无需提交。
+
 ```powershell
 # 1) JS 语法
 node --check www/js/engine.js
@@ -194,9 +198,10 @@ node --check www/js/store.js
 # 2) Android 资源悬空引用（构建阻塞自检）
 node analysis/res_audit.js     # 期望输出「悬空引用：无 ✓」
 
-# 3) 引擎行为回归（虚拟时钟测试台，无网络依赖，秒级跑完 10 个真实节点场景）
+# 3) 引擎行为回归（虚拟时钟测试台，无网络依赖，8 秒跑完 13 个真实节点场景）
 node analysis/engine_harness.js www/js/engine.js
 # 期望：全部场景「浪费 0%、报错 0、误报提示 0、不被误终止」，S10 只在本次用量到 64MiB 时停
+# 对比用基线：analysis/engine_v1_baseline.js（重写前）、analysis/engine_v2a_nosuspend.js（后台挂起保护前）
 
 # 4) 出包验收（唯一真实验证途径）
 git push origin main           # 触发 android-apk workflow
