@@ -40,14 +40,17 @@ public class SpeedForegroundService extends Service {
 
     // ---------------- 后台泵状态（静态：插件与泵线程共用，无需绑定服务） ----------------
     private static final Object PUMP_LOCK = new Object();
-    private static final AtomicLong PUMP_BYTES = new AtomicLong(0);
+    private static final AtomicLong PUMP_BYTES = new AtomicLong(0);    // 进程内累计（只增不减）
+    private static final AtomicLong PUMP_DRAINED = new AtomicLong(0);  // 已被 JS 领走的量
     private static final List<Thread> PUMP_WORKERS = new ArrayList<Thread>();
     private static final List<HttpURLConnection> PUMP_CONNS = new ArrayList<HttpURLConnection>();
     private static volatile boolean pumpRunning = false;
+    private static volatile String pumpUrl = null;      // 本世代下载的地址（用于识别「切换节点」）
     private static volatile int pumpThreadCount = 1;
     private static volatile long pumpLimitBps = 0;      // 平均速率上限（0 = 不限）
     private static volatile long pumpBudgetBytes = 0;   // 交棒时剩余用量预算（0 = 不限）
     private static volatile long pumpBaseBytes = 0;     // 交棒时 JS 侧已消耗的总量（仅用于通知文案）
+    private static volatile long pumpGenStartBytes = 0; // 本世代开始时的累计量（预算按「本世代增量」算）
     private static volatile long pumpNoteAt = 0;
     private static volatile SpeedForegroundService instance = null;
 
@@ -57,6 +60,7 @@ public class SpeedForegroundService extends Service {
     private static volatile long armedLimitBps = 0;
     private static volatile long armedBudgetBytes = 0;
     private static volatile long armedBaseBytes = 0;
+    private static volatile long armedAt = 0;           // 授权心跳时间戳（超过 60 秒未刷新即失效）
     private BroadcastReceiver screenReceiver = null;
 
     @Override
@@ -67,7 +71,15 @@ public class SpeedForegroundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         instance = this;
-        startInForeground(buildNotification("后台测速进行中，点击回到应用"));
+        try {
+            startInForeground(buildNotification("后台测速进行中，点击回到应用"));
+        } catch (Throwable t) {
+            // Android 12+ 在后台调用 startForegroundService 会抛 ForegroundServiceStartNotAllowedException：
+            // 绝不能让它崩掉整个进程，停掉自己，等下次在前台时再启动
+            instance = null;
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         PowerManager pm = (PowerManager) getApplicationContext().getSystemService(Context.POWER_SERVICE);
         if (wakeLock == null) {
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SpeedCheck:bg");
@@ -92,8 +104,11 @@ public class SpeedForegroundService extends Service {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (intent != null && Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    long age = System.currentTimeMillis() - armedAt;
                     String url = armedUrl;
-                    if (url != null && !pumpRunning && instance != null) {
+                    // 授权必须「新鲜」：服务被 START_STICKY 重启、或 JS 早已不在了的时候，
+                    // 绝不能在无人看管的情况下自动接管消耗流量
+                    if (url != null && age >= 0 && age < 60000 && !pumpRunning && instance != null) {
                         startPump(url, armedThreads, armedLimitBps, armedBudgetBytes, armedBaseBytes);
                     }
                 }
@@ -159,16 +174,30 @@ public class SpeedForegroundService extends Service {
         if (instance == null) {
             return false;
         }
+        int wantThreads = Math.max(1, Math.min(32, threads));
+        synchronized (PUMP_LOCK) {
+            // 已在跑且参数一致：幂等返回（每次可见时的重复 arm/start 不会重建线程）
+            if (pumpRunning && url.equals(pumpUrl) && wantThreads == pumpThreadCount) {
+                return true;
+            }
+        }
+        if (pumpRunning) {
+            // 参数变了（测试中切换了节点/线程数）：先停干净再按新参数重建，绝不继续下载旧地址。
+            // 注意必须在锁外停：泵线程自己也会抢 PUMP_LOCK，锁内 join 会互相等待。
+            stopPump();
+        }
         synchronized (PUMP_LOCK) {
             if (pumpRunning) {
                 return true;
             }
             pumpRunning = true;
-            pumpThreadCount = Math.max(1, Math.min(32, threads));
+            pumpUrl = url;
+            pumpThreadCount = wantThreads;
             pumpLimitBps = Math.max(0, limitBps);
             pumpBudgetBytes = Math.max(0, budgetBytes);
             pumpBaseBytes = Math.max(0, alreadyBytes);
-            PUMP_BYTES.set(0);
+            pumpGenStartBytes = PUMP_BYTES.get();
+            PUMP_CONNS.clear();
             pumpNoteAt = 0;
             for (int i = 0; i < pumpThreadCount; i++) {
                 Thread t = new Thread(new PumpWorker(url), "speed-pump-" + i);
@@ -179,9 +208,15 @@ public class SpeedForegroundService extends Service {
         return true;
     }
 
-    /** 停止后台泵并返回本轮原生侧消耗的字节数（读数即清零：重复调用只会得到 0，不会重复计数）。 */
+    /**
+     * 停止后台泵并返回「本次尚未被 JS 领走」的字节数。
+     *
+     * <p>读数语义：{@code PUMP_BYTES} 是进程内累计量（只增不减），{@code PUMP_DRAINED} 是已被领走的量，
+     * 所以重复调用只会得到 0，也不会因为中途重建世代而丢字节。
+     * 必须先把线程真正停下来再读数，否则仍在 read() 中的线程会把最后一批字节加进来重复计数。
+     */
     public static long stopPump() {
-        long bytes;
+        List<Thread> workers;
         synchronized (PUMP_LOCK) {
             pumpRunning = false;
             for (int i = 0; i < PUMP_CONNS.size(); i++) {
@@ -192,39 +227,52 @@ public class SpeedForegroundService extends Service {
                 }
             }
             PUMP_CONNS.clear();
-            for (int i = 0; i < PUMP_WORKERS.size(); i++) {
+            workers = new ArrayList<Thread>(PUMP_WORKERS);
+            PUMP_WORKERS.clear();
+            for (int i = 0; i < workers.size(); i++) {
                 try {
-                    PUMP_WORKERS.get(i).interrupt();
+                    workers.get(i).interrupt();   // 中断位即终止信号：读循环与循环条件都会据此退出
                 } catch (Throwable ignored) {
                 }
             }
-            PUMP_WORKERS.clear();
-            bytes = PUMP_BYTES.getAndSet(0);
         }
-        return bytes;
+        // 在锁外等待线程退出（它们退出前还要抢 PUMP_LOCK 摘除连接）
+        for (int i = 0; i < workers.size(); i++) {
+            try {
+                workers.get(i).join(400);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        long total = PUMP_BYTES.get();
+        long drained = PUMP_DRAINED.getAndSet(total);
+        return Math.max(0, total - drained);
     }
 
-    /** 登记「允许息屏自动接管」的参数（JS 开始测试且开启保持后台运行时调用）。 */
+    /** 登记「允许息屏自动接管」的参数（JS 开始测试且开启保持后台运行时调用，会周期性刷新）。 */
     public static void armPump(String url, int threads, long limitBps, long budgetBytes, long alreadyBytes) {
         armedUrl = url;
         armedThreads = Math.max(1, Math.min(32, threads));
         armedLimitBps = Math.max(0, limitBps);
         armedBudgetBytes = Math.max(0, budgetBytes);
         armedBaseBytes = Math.max(0, alreadyBytes);
+        armedAt = System.currentTimeMillis();   // 心跳：授权超过 60 秒没刷新即视为失效
     }
 
-    /** 撤销授权并停掉后台泵（测试结束 / 关闭保持后台运行 / 退出应用时调用）。 */
-    public static void disarmPump() {
+    /** 撤销授权并停掉后台泵，返回尚未被 JS 领走的字节数（调用方必须计入总使用量，否则这批流量会丢账）。 */
+    public static long disarmPump() {
         armedUrl = null;
-        stopPump();
+        armedAt = 0;
+        return stopPump();
     }
 
     public static boolean isPumpRunning() {
         return pumpRunning;
     }
 
+    /** 未被 JS 领走的字节数（供 JS 判断是否需要清算）。 */
     public static long pumpBytesNow() {
-        return PUMP_BYTES.get();
+        return Math.max(0, PUMP_BYTES.get() - PUMP_DRAINED.get());
     }
 
     // ---------------- 后台泵：工作线程 ----------------
@@ -241,7 +289,9 @@ public class SpeedForegroundService extends Service {
             byte[] buf = new byte[READ_BUF];
             long windowStart = System.currentTimeMillis();
             long windowBytes = 0;
-            while (pumpRunning) {
+            // 中断位就是终止信号：stopPump() 只 interrupt 一次，所以循环条件必须看它，
+            // 否则被中断的线程会一直活着（每轮前后台切换就泄漏一整套线程）
+            while (pumpRunning && !Thread.currentThread().isInterrupted()) {
                 HttpURLConnection conn = null;
                 try {
                     conn = (HttpURLConnection) new URL(url).openConnection();
@@ -261,10 +311,14 @@ public class SpeedForegroundService extends Service {
                     }
                     InputStream in = conn.getInputStream();
                     int n;
-                    while (pumpRunning && (n = in.read(buf)) > 0) {
-                        long total = PUMP_BYTES.addAndGet(n);
-                        if (pumpBudgetBytes > 0 && total >= pumpBudgetBytes) {
-                            pumpRunning = false;   // 到达本次预算：停下即可，由 JS 侧决定后续
+                    while (pumpRunning && !Thread.currentThread().isInterrupted() && (n = in.read(buf)) > 0) {
+                        PUMP_BYTES.addAndGet(n);
+                        if (pumpBudgetBytes > 0 && PUMP_BYTES.get() - pumpGenStartBytes >= pumpBudgetBytes) {
+                            // 到达本次预算：立即停泵并撤销息屏授权（否则下次息屏又会用同一参数起来、立刻命中退出）
+                            armedUrl = null;
+                            armedAt = 0;
+                            pumpRunning = false;
+                            maybeUpdateNotification("已达用量上限，已停止后台消耗");
                             break;
                         }
                         if (pumpLimitBps > 0) {
@@ -307,8 +361,13 @@ public class SpeedForegroundService extends Service {
 
     /** 泵在跑时把进度写进常驻通知（≤ 每 3 秒一次），用户锁屏也能看到后台确实在消耗。 */
     private static void maybeUpdateNotification() {
+        maybeUpdateNotification(null);
+    }
+
+    /** overrideText 非空时立即推送该文案（不受 3 秒节流限制）。 */
+    private static void maybeUpdateNotification(String overrideText) {
         long now = System.currentTimeMillis();
-        if (now - pumpNoteAt < 3000) {
+        if (overrideText == null && now - pumpNoteAt < 3000) {
             return;
         }
         pumpNoteAt = now;
@@ -318,12 +377,20 @@ public class SpeedForegroundService extends Service {
         }
         try {
             NotificationManager nm = (NotificationManager) svc.getSystemService(Context.NOTIFICATION_SERVICE);
-            nm.notify(NOTIFY_ID, svc.buildNotification("后台消耗中 · 累计 " + humanBytes(pumpBaseBytes + PUMP_BYTES.get())));
+            // PUMP_BYTES 是进程内累计量（只增不减），所以多次接管时通知里的数字不会回退
+            String text = overrideText != null
+                    ? overrideText
+                    : "后台消耗中 · 累计 " + humanBytes(pumpBaseBytes + PUMP_BYTES.get());
+            nm.notify(NOTIFY_ID, svc.buildNotification(text));
         } catch (Throwable ignored) {
             // 通知更新失败不影响下载
         }
     }
 
+    /**
+     * 退避等待。被 interrupt 时重新置上中断位（sleep 会把中断位清掉），
+     * 这样读循环与最外层循环的 isInterrupted() 判定就能让线程立刻退出。
+     */
     private static void sleepQuietly(long ms) {
         try {
             Thread.sleep(ms);

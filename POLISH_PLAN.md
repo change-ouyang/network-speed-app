@@ -174,7 +174,7 @@
 | 问题 | 位置 | 说明 |
 |---|---|---|
 | IP 归属接口稳定性 | `www/js/geo.js` | 已剔除两个死源；剩余 5 个 https 源仍受所在网络影响，失败会自动重试 2 轮 |
-| 后台被 ROM 冻结 | 系统层（已加提示） | 真机实测：页面未重载但数字停住 = 后台 JS 被冻结。引擎已尽力自救（字节驱动 tick、回前台重建 worker、零消耗提示）；彻底解决需把下载循环搬进前台服务（原生），属大改，未做 |
+| 后台被 ROM 冻结 | 系统层 | 真机实测（红米 K70 / Android 16）：页面未重载但数字停住 = 后台 JS 被系统冻结，前端无法自救。**已落地彻底方案**：原生后台泵 + 息屏广播接管（见第 6 节）；仅当厂商连整个进程一起冻结时，才需要用户手动把省电策略设为「无限制」 |
 
 > 旧的「并发失败退避偏重 / 用量上限停止粒度 / 分块常量与注释」三条已随引擎 v2 重写失效，见第 6 节。
 
@@ -234,3 +234,12 @@ git push origin main           # 触发 android-apk workflow
 | 息屏/后台彻底停止消耗 | WebView 的 JS 与定时器被系统冻结（真机：红米 K70 / Android 16，息屏即停），**前端无法自救** | 新增**原生后台泵**：切后台/息屏时 JS 交棒给前台服务的原生线程（`pumpStart/pumpStop/pumpStats`）；原生侧只做「持续下载 + 计数 + 重试 + 限速 + 用量预算」，绝不判断「节点是否可用」，因此不会误停；回前台取回字节数并重启引擎；通知栏实时显示累计用量；退出应用/划掉最近任务自动停泵（`onTaskRemoved`） |
 
 验收基线（v2，`engine_harness.js` 全场景）：浪费 0%、报错 0 次、误报提示 0 次、无误终止；理想场景吞吐与 v1 持平（259.4 vs 258.9 Mbps），病态场景大幅提升（咪咕式小切片 4.0 → 464.0 MiB / 60s）。
+
+### 验证证据（第 5 轮补记，勿删）
+
+- **桩类忠实性已与真实源码比对**：`analysis/android_stubs` 里 Capacitor 部分逐条核对 `node_modules/@capacitor/android` 的真实 Java 源码——`JSObject.put` 的 6 个重载、`PluginCall.getString/resolve/reject`、`Plugin.getActivity()` 返回 `AppCompatActivity`、`BridgeActivity.registerPlugin(Class<? extends Plugin>)` 全部一致 ⇒ 本机 javac 通过即对 CI 有高置信度（Android 框架侧用的是 API 1~29 的长期稳定签名，且 `startForeground/Notification.Builder/WakeLock` 等已由既有出厂代码证明可用）。
+- **`java_check.js` 真的拦下过一次错误**：加入息屏广播接管代码后，它报出 `Intent.ACTION_SCREEN_OFF` / `IntentFilter` / `Context.registerReceiver` 缺桩（9 个 error）→ 按真实签名补桩后才通过。说明这道闸门不是摆设。
+- **真实节点探测**（`node_probe.js`）：15 个节点全部可达；越界请求一律标准 `416`（无硬拒）⇒ 旧版「越界被 403 → 误判节点拒绝 → 2.3MiB 就停」的触发条件是 CDN 差异，不是所有节点都会中。
+- **并发探测**（`concurrency_probe.js`）：对用户的「咕咪快游2」压 8/16/32 并发各 3 轮 —— **全部 200、零失败、零限流** ⇒ 节点侧不拒绝 32 线程；主人遇到的「连接不稳定/个别请求失败」来自**手机侧**（移动网络 NAT/连接数限制导致部分请求超时或中断），所以正确对策是「静默退避重试、绝不因此停止」，而不是降低线程数或弹窗告警。
+- **引擎回归**：21 场景（含 8/32 线程、真实节点形状、15% 5xx、20% 429、后台节流/冻结/过期定时器竞态）全部「浪费 0%、可见提示 0」；唯一「被终止」的是 S10 用量上限（设计行为）。
+- **无人看管的原生泵**已加两道保险：退出应用/划掉最近任务（`onTaskRemoved`）停泵停服务；页面被系统回收后重载时，初始化阶段显式 `disarmPump()` + `bgDisable()`。

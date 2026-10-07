@@ -117,8 +117,10 @@ public class SpeedServicePlugin extends Plugin {
     @PluginMethod
     public void disarmPump(PluginCall call) {
         try {
-            SpeedForegroundService.disarmPump();
-            call.resolve();
+            long bytes = SpeedForegroundService.disarmPump();
+            JSObject r = new JSObject();
+            r.put("bytes", String.valueOf(bytes));   // JS 侧必须把它计入总使用量，否则这批流量丢账
+            call.resolve(r);
         } catch (Exception e) {
             call.reject("disarmPump failed: " + e.getMessage());
         }

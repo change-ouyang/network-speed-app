@@ -91,12 +91,16 @@
         return true;
       } catch (e) { return false; }
     },
-    // 撤销授权并停泵（测试结束 / 关闭后台运行 / 退出应用）
+    // 撤销授权并停泵；返回尚未并入总使用量的字节数（调用方必须 absorb，否则丢账）
     async disarmPump() {
-      if (!isNative()) return false;
+      if (!isNative()) return 0;
       const p = plugin("SpeedService");
-      if (!p || !p.disarmPump) return false;
-      try { await p.disarmPump(); return true; } catch (e) { return false; }
+      if (!p || !p.disarmPump) return 0;
+      try {
+        const r = await p.disarmPump();
+        const n = r && r.bytes != null ? Number(r.bytes) : 0;
+        return isFinite(n) && n > 0 ? n : 0;
+      } catch (e) { return 0; }
     },
     // 退出应用：只结束当前 Activity；已开启的前台服务/后台测速不受影响
     async exitApp() {

@@ -122,7 +122,8 @@
   // 后台运行 = 前台服务（测试中/原生后台泵在跑 且 开关开启时挂常驻服务，其余时候停掉）
   let bgWarned = false, bgHinted = false;
   // 原生后台泵与后台统计的状态（声明放在使用点之前，避免 TDZ）
-  let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0, lastPumpSettleAt = 0, lastArmAt = 0;
+  // handedOff：引擎是「被交棒停掉」的（不是用户/自动停止）——回前台必须把它重新跑起来
+  let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0, lastArmAt = 0, handedOff = false;
   function syncBgService() {
     if ((engine.running || pumpOn) && Store.getKeepBg()) {
       // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
@@ -142,7 +143,8 @@
         });
       }
     } else {
-      window.SpeedNative.disarmPump();   // 撤销授权并停泵（测试已停 / 开关已关）
+      // 撤销授权并停泵；返回的原生字节必须 absorb（否则这批流量丢账）
+      window.SpeedNative.disarmPump().then(absorbPumpBytes);
       window.SpeedNative.bgDisable();
     }
   }
@@ -176,6 +178,7 @@
     maintainNativePump();   // 自节流（3 秒一次）：清算原生泵字节 + 刷新息屏授权参数
   });
   engine.on("stop", (reason, detail) => {
+    handedOff = false;   // 任何「真正的停止」（用户手动/自动停止）都要清掉交棒标记，回前台不再自动重启
     let msg = "";
     if (reason === "reachMaxUse") { msg = "已达到用量上限（本次测试），自动停止"; toast(msg); }
     if (reason === "nodeRejected") { msg = "自动停止：「" + (currentNode ? currentNode.label : "节点") + "」拒绝访问（" + detail + "），请更换节点"; toast(msg, 4200); }
@@ -430,7 +433,7 @@
   async function shutdownBeforeExit() {
     try {
       engine.stop();
-      await window.SpeedNative.disarmPump();   // 停泵 + 撤销息屏自动接管
+      absorbPumpBytes(await window.SpeedNative.disarmPump());   // 停泵 + 撤销息屏接管，字节计入
       pumpOn = false;
       await window.SpeedNative.bgDisable();
     } catch (e) {}
@@ -560,6 +563,12 @@
   if (!Store.get(Store.K.acknowledged, "")) showNotice();
   refreshPlayUI();
 
+  // 页面是「被系统回收后重载」时（不是正常前后台切换），上一轮的一切都已失效：
+  // 必须清掉原生泵授权并把前台服务停掉，否则原生泵会在无人看管的情况下一直消耗流量。
+  // 顺序很关键：放在 autoStart 之前，自动运行重新开测时会由 syncBgService() 重新授权。
+  window.SpeedNative.disarmPump().then(absorbPumpBytes);
+  window.SpeedNative.bgDisable();
+
   // 自动运行
   if (Store.getAutoStart()) {
     setTimeout(() => {
@@ -574,56 +583,83 @@
   // ---- 原生后台泵：切后台/息屏后 WebView 的 JS 会被系统冻结（真机实测：页面未重载但数字停住），
   //      只有前台服务的原生线程还能继续消耗流量。两条触发路径最终都汇到 maintainNativePump() 清算字节：
   //        ① 切后台：JS 交棒（handOffToNative）；② 息屏没来得及触发事件：原生按「已授权」参数自己接管。
-  async function handOffToNative() {
+  //
+  //      可见性代际（visEpoch）：交棒里有 await（起原生泵），若用户在这几毫秒内切回前台，
+  //      旧分支必须作废——否则会出现「原生泵在跑、引擎被停、UI 显示已停止、清算入口永不触发」的僵尸态。
+  let visEpoch = 0;
+
+  function absorbPumpBytes(bytes) {
+    if (!(bytes > 0)) return;
+    pumpTotal += bytes;
+    engine.totalBytes += bytes;    // 原生侧消耗照常计入总使用量
+    engine.sessionBytes += bytes;
+    pumpOn = false;
+    persistTotalUse(true);
+    renderMetrics(engine);
+  }
+
+  async function handOffToNative(myEpoch) {
     if (!engine.running || !Store.getKeepBg() || !engine.url) return false;
     const ok = await window.SpeedNative.pumpStart(engine.url, engine.threads, {
       limitBps: engine.speedLimit,
       budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
       alreadyBytes: engine.totalBytes
     });
-    if (!ok) return false;   // 原生泵没起来（服务没在跑）：别停 JS，继续跑总比停了好
+    if (!ok) {
+      // 服务没在跑 / 被 ROM 杀掉：别停 JS（继续跑总比停了好），但要让用户知道后台可能不保
+      if (!bgHandoffWarned) {
+        bgHandoffWarned = true;
+        toast("后台服务未就绪：切到后台后可能无法继续消耗，请在系统设置里允许「后台运行/自启动」", 4600);
+      }
+      return false;
+    }
+    if (myEpoch !== visEpoch || !document.hidden) {
+      // 起泵过程中已经回到前台：立刻收回原生泵，绝不去停引擎（引擎一停就没人清算了）
+      absorbPumpBytes(await window.SpeedNative.pumpStop());
+      return false;
+    }
     pumpOn = true;
-    engine.stop();           // 停 JS 侧流量，避免两边同时下载同一条线（重复计数、白跑）
+    handedOff = true;
+    engine.stop();           // 停 JS 侧流量，避免两边同时下载同一条线（重复计数、白跑）——注意 stop() 不会触发 onStop
     return true;
   }
 
   // 清算原生泵（只在页面可见时做）：并入字节、刷新「息屏自动接管」授权参数
+  // 节流用「进行中」标志而不是时间戳：时间戳在 await 之前赋值会让节流形同虚设
+  let pumpSettling = false;
   async function maintainNativePump() {
-    if (document.hidden) return;
-    const now = Date.now();
-    if (engine.running && Store.getKeepBg() && engine.url && now - lastArmAt > 30000) {
-      lastArmAt = now;
-      window.SpeedNative.armPump(engine.url, engine.threads, {
-        limitBps: engine.speedLimit,
-        budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
-        alreadyBytes: engine.totalBytes
-      });
-    }
-    if (now - lastPumpSettleAt < 3000) return;
-    lastPumpSettleAt = now;
-    const st = await window.SpeedNative.pumpStats();
-    if (!st.bytes) return;
-    const bytes = await window.SpeedNative.pumpStop();   // 停泵并清零（重复调用不会重复计数）
-    if (bytes > 0) {
-      pumpTotal += bytes;
-      engine.totalBytes += bytes;      // 原生侧后台消耗照常计入总使用量
-      engine.sessionBytes += bytes;
-      pumpOn = false;
-      persistTotalUse(true);
-      renderMetrics(engine);
+    if (document.hidden || pumpSettling) return;
+    pumpSettling = true;
+    try {
+      // 授权参数周期性刷新（5 秒一次）：原生侧按「授权新鲜度 + 剩余预算」决定是否息屏接管
+      if (engine.running && Store.getKeepBg() && engine.url && Date.now() - lastArmAt > 5000) {
+        lastArmAt = Date.now();
+        window.SpeedNative.armPump(engine.url, engine.threads, {
+          limitBps: engine.speedLimit,
+          budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
+          alreadyBytes: engine.totalBytes
+        });
+      }
+      const st = await window.SpeedNative.pumpStats();
+      if (!st.bytes) return;
+      absorbPumpBytes(await window.SpeedNative.pumpStop());   // 停泵并领走字节（含 renderMetrics）
+    } finally {
+      pumpSettling = false;
     }
   }
 
   // 回到前台 / 切到后台
-  let hiddenAt = 0, hiddenBytes = 0, bgFreezeWarned = false;
+  let hiddenAt = 0, hiddenBytes = 0, bgFreezeWarned = false, bgHandoffWarned = false;
   document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
+      const myEpoch = ++visEpoch;
       hiddenAt = Date.now();
       hiddenBytes = engine.totalBytes;
       // 后台期间冻结「停滞/死亡」判定：否则解冻后过期的 1 秒定时器会把冻结时长误判成节点无响应
       engine.suspend();
       if (engine.running) bgCount++;
-      const handed = await handOffToNative();
+      const handed = await handOffToNative(myEpoch);
+      if (myEpoch !== visEpoch) return;   // 期间已切回前台：一切以回前台分支的处理为准
       // 没开「保持后台运行」时系统会冻结 WebView，测速会被暂停 —— 只提醒一次，别反复打扰
       if (!handed && engine.running && !Store.getKeepBg() && !bgHinted) {
         bgHinted = true;
@@ -631,13 +667,18 @@
       }
       return;
     }
+    visEpoch++;                             // 作废任何仍在途的交棒分支
     const hiddenMs = hiddenAt > 0 ? Date.now() - hiddenAt : 0;
     bgMs += hiddenMs;
-    const wasPumping = pumpOn;
     engine.resume();                        // 先恢复判定状态（引擎已停则只重置基准，不误判）
-    lastPumpSettleAt = 0; lastArmAt = 0;
+    lastArmAt = 0;
     await maintainNativePump();             // 清算原生后台消耗的字节（若有）
-    if (wasPumping && !engine.running && engine.url) engine.start(engine.url, engine.threads);   // 交棒过 → 重启 JS 引擎
+    // 被交棒停掉的引擎必须重新跑起来，绝不能留在「已停止」的状态（否则清算入口也永不触发）
+    if (handedOff) {
+      handedOff = false;
+      pumpOn = false;
+      if (!engine.running && engine.url) engine.start(engine.url, engine.threads);
+    }
     renderMetrics(engine);
     refreshPlayUI();
     // 后台一字节都没消耗 = 系统把整个进程/JS 都冻住了，这不是前端能自救的，必须让用户去改系统设置
