@@ -1,8 +1,8 @@
 {
-  "name": "network-speed-app",
+  "name": "traffic-consumer-app",
   "private": true,
   "version": "1.0.0",
-  "description": "网络速度：安卓端测速 App（Capacitor WebView 壳，复刻 270666.xyz 网络速度自查）",
+  "description": "流量消耗器（原「网络速度」）：安卓端流量消耗与测速 App（Capacitor WebView 壳，复刻 270666.xyz 网络速度自查）",
   "scripts": {
     "cap:sync": "cap sync android",
     "assets": "capacitor-assets generate",

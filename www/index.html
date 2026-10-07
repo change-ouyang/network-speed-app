@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <title>网络速度</title>
+  <title>流量消耗器</title>
   <link rel="stylesheet" href="css/theme.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="logo"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4a8 8 0 0 0-8 8c0 1.5.4 2.9 1.1 4.1l-1.5 1.5A10 10 0 1 1 12 2a10 10 0 0 1 8.4 4.6l-1.5 1.5A8 8 0 0 0 12 4z" fill="#fff" opacity=".9"/><path d="M12 6a6 6 0 0 0-6 6c0 1.2.3 2.3.9 3.2l7.8-7.8A6 6 0 0 0 12 6z" fill="#fff"/><path d="M14.3 9.7 20 4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
-      <span class="brand-name">网络速度</span>
+      <span class="brand-name">流量消耗器</span>
     </div>
     <button class="ghost-btn" id="btnAbout">说明</button>
   </header>
@@ -32,7 +32,7 @@
       </div>
 
       <div class="select" id="sel">
-        <div class="select-trigger">
+        <div class="select-trigger" role="button" tabindex="0" aria-label="选择测试地址" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="14" height="14" class="link-ic"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 1 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z" fill="currentColor"/></svg>
           <span id="selLabel">微软商店</span>
           <svg class="arrow" viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
@@ -59,7 +59,7 @@
       </div>
 
       <div class="metrics">
-        <div class="metric">
+        <div class="metric" id="mUsedTile" role="button" tabindex="0" aria-label="总使用量，累计值，点击清零">
           <div class="metric-head"><span>总使用量</span><button class="icon-btn sm" id="btnMaxUse" title="设置用量上限" aria-label="设置用量上限"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
           <div class="metric-val" id="mUsed">0 B</div>
         </div>
@@ -91,7 +91,7 @@
       <div class="ip-geo" id="ipGeo">-</div>
     </section>
 
-    <p class="disclaimer">本测试工具仅提供网络速度自查，请勿用于非法用途，使用本工具造成的一切后果由用户承担！</p>
+    <p class="disclaimer">本工具仅用于流量消耗与网络速率自查，请勿用于非法用途，使用本工具造成的一切后果由用户承担！</p>
   </main>
 
   <!-- 全屏图表 -->
@@ -99,7 +99,7 @@
     <div class="chart-head">
       <span>实时速率</span>
       <span class="chart-now" id="chartNow">-</span>
-      <button class="icon-btn" id="btnChartClose"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
+      <button class="icon-btn" id="btnChartClose" title="关闭图表" aria-label="关闭图表"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
     </div>
     <canvas id="chartCanvas"></canvas>
   </div>

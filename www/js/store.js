@@ -7,6 +7,7 @@
     autoStart: "autoStart",  // 自动运行
     maxUse: "maxUse",        // 用量上限（字节，0/空 = 无上限）
     maxSpeed: "maxSpeed",    // 历史峰值（B/s）
+    totalUse: "totalUse",    // 累计总使用量（字节，跨启动保留，可点击清零）
     speedLimit: "speedLimit",// 平均速度限速（B/s，0 = 不限）
     customNodes: "customNodes", // [{label, value}]
     lastNode: "lastNode",    // 上次选择的节点 {label, value}
@@ -41,6 +42,9 @@
     getAutoStart() { return get(K.autoStart, "false") === "true"; },
     getMaxUse() { return parseInt(get(K.maxUse, "0"), 10) || 0; },
     getMaxSpeed() { return parseInt(get(K.maxSpeed, "0"), 10) || 0; },
+    getTotalUse() { return parseInt(get(K.totalUse, "0"), 10) || 0; },
+    // 累计用量可能超过 2GiB，不能用位运算取整
+    setTotalUse(v) { set(K.totalUse, String(Math.max(0, Math.round(v || 0)))); },
     getSpeedLimit() { return parseInt(get(K.speedLimit, "0"), 10) || 0; },
     getCustomNodes() { return getJSON(K.customNodes, []); },
     getLastNode() { return getJSON(K.lastNode, null); },

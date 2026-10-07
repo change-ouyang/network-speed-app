@@ -1,6 +1,6 @@
 {
   "appId": "com.ouyang.speedcheck",
-  "appName": "网络速度",
+  "appName": "流量消耗器",
   "webDir": "www",
   "android": {
     "adjustMarginsForEdgeToEdge": "force"

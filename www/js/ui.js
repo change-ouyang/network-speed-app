@@ -51,6 +51,8 @@
       g.options.forEach(opt => {
         const item = document.createElement("div");
         item.className = "select-item" + (currentNode && currentNode.value === opt.value ? " active" : "");
+        item.setAttribute("role", "button");
+        item.tabIndex = 0;
         item.textContent = opt.label;
         item.addEventListener("click", () => {
           selectNode(opt);
@@ -69,10 +71,26 @@
   }
   function toggleSelect(open) {
     $("sel").classList.toggle("open", open);
+    const trig = document.querySelector("#sel .select-trigger");
+    if (trig) trig.setAttribute("aria-expanded", open ? "true" : "false");
   }
   $("sel").addEventListener("click", (e) => {
     if (e.target.closest(".select-panel")) return;
     toggleSelect(!$("sel").classList.contains("open"));
+  });
+  // 键盘无障碍：触发区回车/空格展开，下拉项回车/空格选中（TalkBack 可操作）
+  function isActivateKey(e) { return e.key === "Enter" || e.key === " " || e.key === "Spacebar"; }
+  document.querySelector("#sel .select-trigger").addEventListener("keydown", (e) => {
+    if (!isActivateKey(e)) return;
+    e.preventDefault();
+    toggleSelect(!$("sel").classList.contains("open"));
+  });
+  $("selPanel").addEventListener("keydown", (e) => {
+    if (!isActivateKey(e)) return;
+    const item = e.target.closest(".select-item");
+    if (!item) return;
+    e.preventDefault();
+    item.click();
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#sel")) toggleSelect(false);
@@ -102,9 +120,16 @@
   $("swAuto").addEventListener("change", (e) => Store.set(Store.K.autoStart, e.target.checked));
 
   // 后台运行 = 前台服务（测试中且开关开启时挂常驻服务，其余时候停掉）
+  let bgWarned = false, bgHinted = false;
   function syncBgService() {
     if (engine.running && Store.getKeepBg()) {
-      window.SpeedNative.bgEnable();
+      // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
+      window.SpeedNative.bgEnable().then((ok) => {
+        if (!ok && !bgWarned) {
+          bgWarned = true;
+          toast("后台运行服务启动失败：请确认已允许通知权限（部分 ROM 还需允许本应用「后台运行/自启动」）", 4200);
+        }
+      });
     } else {
       window.SpeedNative.bgDisable();
     }
@@ -123,14 +148,26 @@
     $("mBand").textContent = (mbps >= 100 ? Math.round(mbps) : mbps.toFixed(1)) + " Mbps";
     $("bandBar").style.width = Math.min(100, mbps / 500 * 100).toFixed(1) + "%";
   }
+  // 累计用量持久化：5 秒一次 + 停止时强制落盘，页面被系统回收重载后不会丢
+  let lastPersistAt = 0;
+  function persistTotalUse(force) {
+    const now = Date.now();
+    if (!force && now - lastPersistAt < 5000) return;
+    lastPersistAt = now;
+    Store.setTotalUse(engine.totalBytes);
+  }
+
   engine.on("tick", (e) => {
     renderMetrics(e);
     persistPeak();
+    persistTotalUse(false);
   });
   engine.on("stop", (reason, detail) => {
     let msg = "";
-    if (reason === "reachMaxUse") { msg = "已达到用量上限，自动停止"; toast(msg); }
+    if (reason === "reachMaxUse") { msg = "已达到用量上限（本次测试），自动停止"; toast(msg); }
     if (reason === "nodeRejected") { msg = "自动停止：「" + (currentNode ? currentNode.label : "节点") + "」拒绝访问（" + detail + "），请更换节点"; toast(msg, 4200); }
+    if (reason === "nodeDead") { msg = "自动停止：「" + (currentNode ? currentNode.label : "节点") + "」" + detail + "，请更换节点或稍后重试"; toast(msg, 4200); }
+    persistTotalUse(true);
     $("runStatus").textContent = msg || (detail || "");
     renderMetrics({ ...engine, running: false });
     refreshPlayUI();
@@ -195,7 +232,7 @@
   $("btnMaxUse").addEventListener("click", () => {
     const cur = Store.getMaxUse();
     openModal("用量上限",
-      '<p>累计使用量达到上限后自动停止测试。</p>' +
+      '<p>本次测试用量达到上限后自动停止（累计总使用量不受影响）。</p>' +
       '<input class="m-input" id="inMaxUse" placeholder="留空则无上限" value="' + (cur > 0 ? window.formatBytes(cur, 1) : "") + '">' +
       '<p class="muted">支持 500MB、2GB 或字节数</p>',
       [
@@ -253,7 +290,7 @@
     const list = Store.getCustomNodes();
     const items = list.map((n, i) =>
       "<div class='custom-item'><span>" + escapeHTML(n.label) + "</span>" +
-      "<button class='icon-btn del' data-i='" + i + "'>删除</button></div>"
+      "<button class='icon-btn del' data-i='" + i + "' aria-label='删除 " + escapeHTML(n.label) + "'>删除</button></div>"
     ).join("") || "<p class='muted'>没有自定义地址</p>";
     openModal("自定义地址",
       items +
@@ -326,7 +363,7 @@
         {
           text: "系统分享", fn: async () => {
             const ok = await window.SpeedNative.share({
-              title: "网络速度自查",
+              title: "流量消耗器",
               text: currentNode.label + " 测速地址",
               url: currentNode.value,
               dialogTitle: "分享测试地址"
@@ -361,11 +398,12 @@
       : "";
     openModal("使用说明",
       "<p><b>关于本页</b></p>" +
-      "<p>1、本应用为「网络速度」安卓端，与网页版功能保持一致：多线程循环下载真实公开文件测速，实时显示总使用量、速度与带宽峰值；</p>" +
+      "<p>1、本应用为「流量消耗器」（原「网络速度」）安卓端：多线程循环下载真实公开文件消耗流量并测速，实时显示总使用量、速度与带宽峰值；</p>" +
       "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；部分国产 ROM 需在系统设置中允许本应用「后台运行/自启动」并把省电策略设为无限制；</p>" +
       "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
       "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
+      "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止。</p>" +
       verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
   });
@@ -373,7 +411,7 @@
   function showNotice() {
     openModal("公告",
       "<p><b>🔥用前须知🔥</b></p>" +
-      "<p>1、本应用仅供交流、学习、测试使用，您可以用于排查网络是否可正常访问各测试地址，显示各类访问信息来评估网络质量；</p>" +
+      "<p>1、本应用仅供交流、学习、测试使用，可用于主动消耗网络流量、测试下行速率与链路稳定性；</p>" +
       "<p>2、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
       "<p>3、测试会产生真实的下载流量，请留意用量上限设置。</p>",
       [
@@ -462,6 +500,26 @@
   applyThreadUI(Store.getThreadNum());
   engine.maxUse = Store.getMaxUse();
   engine.speedLimit = Store.getSpeedLimit();
+
+  // 恢复累计总使用量（跨启动保留：页面被系统回收重载后不再「被重置」），并支持点击清零
+  engine.totalBytes = Store.getTotalUse();
+  $("mUsed").textContent = window.formatBytes(engine.totalBytes, 1);
+  function resetTotalUse() {
+    engine.totalBytes = 0;
+    engine.sessionBytes = 0;   // 累计清零时本次也归零，避免平均速度被历史用量污染
+    Store.setTotalUse(0);
+    renderMetrics(engine);
+    toast("累计总使用量已清零");
+  }
+  $("mUsedTile").addEventListener("click", (e) => {
+    if (e.target.closest("#btnMaxUse")) return;   // 上限按钮不触发清零
+    resetTotalUse();
+  });
+  $("mUsedTile").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    resetTotalUse();
+  });
   const savedPeak = Store.getMaxSpeed();
   if (savedPeak > 0) {
     engine.peakSpeed = savedPeak;
@@ -484,12 +542,35 @@
     }, 600);
   }
 
-  // 回到前台：清掉后台期间累积的速率窗口，避免瞬时速度跳变
+  // 回到前台 / 切到后台
+  let hiddenAt = 0, hiddenBytes = 0, bgFreezeWarned = false;
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && engine.running) {
-      engine.resetRateWindow();
-      renderMetrics(engine);
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      hiddenBytes = engine.totalBytes;
+      // 后台期间冻结「停滞/死亡」判定：否则解冻后过期的 1 秒定时器会把冻结时长误判成节点无响应
+      engine.suspend();
+      // 没开「保持后台运行」时系统可能冻结 WebView，测速会被暂停 —— 只提醒一次，别反复打扰
+      if (engine.running && !Store.getKeepBg() && !bgHinted) {
+        bgHinted = true;
+        toast("未开启「保持后台运行」：切到后台后测速可能被系统暂停", 4200);
+      }
+      return;
     }
+    if (engine.running) {
+      const hiddenMs = Date.now() - hiddenAt;
+      // 后台一字节都没消耗 = 系统把后台 JS/网络冻住了：这不是引擎能自救的，必须让用户去改系统设置
+      const froze = hiddenAt > 0 && hiddenMs > 20000 && engine.totalBytes === hiddenBytes;
+      engine.resume();   // 内含：重置进度基准 + 重建全部 worker（回前台不必等看门狗）
+      renderMetrics(engine);
+      if (froze && !bgFreezeWarned) {
+        bgFreezeWarned = true;
+        toast("后台期间没有消耗流量：系统可能冻结了本应用，请允许「后台运行/自启动」并把省电策略设为无限制", 5000);
+      }
+    } else {
+      engine.resume();   // 未在测速也要恢复判定状态
+    }
+    syncBgService();   // 回前台重申一次前台服务，防止被系统回收后一直没恢复
   });
 
   // 系统返回键：优先关掉最上层浮层（弹窗 / 全屏图表 / 下拉），没有浮层时退出应用

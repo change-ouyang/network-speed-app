@@ -76,7 +76,7 @@ public class SpeedForegroundService extends Service {
             builder = new Notification.Builder(this);
         }
         return builder
-                .setContentTitle("网络速度")
+                .setContentTitle("流量消耗器")
                 .setContentText("后台测速进行中，点击回到应用")
                 .setSmallIcon(R.drawable.ic_stat_speed)
                 .setContentIntent(contentIntent())
