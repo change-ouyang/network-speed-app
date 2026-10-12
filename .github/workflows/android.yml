@@ -5,6 +5,9 @@ on:
     paths: ['www/**', 'android/**', 'tests/**', '.github/workflows/android.yml', 'capacitor.config.json', 'package.json', 'package-lock.json']
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -50,3 +53,32 @@ jobs:
           name: traffic-consumer-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  release:
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: traffic-consumer-apk
+          path: apk
+
+      - name: Publish APK directly to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: 1.0.${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" apk/app-debug.apk --clobber
+          else
+            gh release create "$tag" apk/app-debug.apk \
+              --target "$COMMIT_SHA" \
+              --title "流量消耗器 ${VERSION}" \
+              --notes "Android 安装包：点击下方 app-debug.apk 直接下载安装，无需解压。版本：${VERSION}；源码提交：${COMMIT_SHA}。"
+          fi
