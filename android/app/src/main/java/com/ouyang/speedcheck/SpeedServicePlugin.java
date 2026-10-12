@@ -27,6 +27,28 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "SpeedService")
 public class SpeedServicePlugin extends Plugin {
 
+    /** 解析在独立线程执行，不能阻塞 Capacitor 的停止/后台交接消息。 */
+    @PluginMethod
+    public void resolveMigu(PluginCall call) {
+        new Thread(() -> {
+            try {
+                JSObject result = new JSObject();
+                result.put("url", MiguSourceResolver.resolve(MiguSourceResolver.SOURCE_URL));
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        }, "migu-resolve").start();
+    }
+
+    @PluginMethod
+    public void rejectMigu(PluginCall call) {
+        new Thread(() -> {
+            MiguSourceResolver.rejected(MiguSourceResolver.SOURCE_URL, call.getString("url"));
+            call.resolve();
+        }, "migu-invalidate").start();
+    }
+
     /** 通知权限请求码：enable 与 prepPermissions 共用（同一个系统对话框，重复请求无害）。 */
     private static final int REQ_NOTIFICATIONS = 1001;
 

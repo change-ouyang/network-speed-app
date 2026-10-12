@@ -90,6 +90,8 @@
 
     // 单次请求：返回 {status, bytes, total}；字节经 _addBytes 实时入账，中止时已收部分保留
     async _request(off) {
+      const source = this.url;
+      const dynamic = !!window.MIGU_VIDEO_SOURCE && source === window.MIGU_VIDEO_SOURCE;
       const headers = {};
       if (off != null) headers.range = "bytes=" + off + "-" + (off + CHUNK - 1);
       const ctrl = new AbortController();
@@ -101,9 +103,21 @@
       const hard = setTimeout(() => { timedOut = true; ctrl.abort(); }, HARD_TIMEOUT);
       this.stat.req++;
       try {
-        const resp = await fetch(this.url, { headers, cache: "no-store", signal: ctrl.signal });
+        let downloadUrl = source;
+        if (dynamic) {
+          try { downloadUrl = await window.SpeedNative.resolveMigu(); }
+          catch (e) { e.sourceResolve = true; throw e; }
+          // 解析期间停止或切换节点后，不得再启动旧节点的媒体下载。
+          if (ctrl.signal.aborted || !this.running || this.url !== source) {
+            const e = new Error("解析已取消"); e.name = "AbortError"; throw e;
+          }
+        }
+        const resp = await fetch(downloadUrl, { headers, cache: "no-store", signal: ctrl.signal });
         const status = resp.status;
         if (!resp.ok && status !== 206) {
+          if (dynamic && [401, 403, 404, 410, 660, 661].includes(status)) {
+            await window.SpeedNative.rejectMigu(downloadUrl);
+          }
           if (status === 416) this.stat.s416++;
           else if (status === 429) { this.stat.s429++; this.stat.s4xx++; }
           else if (status >= 500) this.stat.s5xx++;
@@ -232,6 +246,10 @@
             continue;
           }
           const status = e && e.status;
+          if (e && (e.nodeUnavailable || (e.sourceResolve && fails >= 3 && Date.now() - this._lastProgressAt > 10000))) {
+            this._finish("nodeDead", e.message);
+            return;
+          }
           if (isProbe && (status === 416 || (status >= 400 && status < 500))) {
             // 连 0-0 都不给 Range：直接落到整包模式，别再无谓试探
             this._rangeProbed = true;

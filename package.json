@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "流量消耗器（原「网络速度」）：安卓端流量消耗与测速 App（Capacitor WebView 壳，复刻 270666.xyz 网络速度自查）",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "cap:sync": "cap sync android",
     "assets": "capacitor-assets generate",
     "preview": "python analysis/preview_server.py"

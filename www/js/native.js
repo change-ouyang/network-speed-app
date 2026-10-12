@@ -1,4 +1,4 @@
-// 原生能力桥：App 内经 Capacitor 调用 Android 前台服务 / App 插件；纯浏览器预览下全部降级为空操作
+// 原生能力桥：App 内经 Capacitor 调用 Android 服务；浏览器预览不执行原生能力
 (function () {
   "use strict";
 
@@ -18,8 +18,37 @@
     } catch (e) { return null; }
   }
 
+  let miguCached = null;
+  let miguPending = null;
+
   window.SpeedNative = {
     isNative,
+    // 短缓存减少下载循环中的桥调用；原生侧负责真正的有效期与前后台共用缓存。
+    async resolveMigu() {
+      const p = plugin("SpeedService");
+      if (!isNative() || !p || !p.resolveMigu) {
+        const e = new Error("需要安装新版 Android App，浏览器仅支持预览");
+        e.nodeUnavailable = true;
+        throw e;
+      }
+      if (miguCached && Date.now() < miguCached.until) return miguCached.url;
+      if (!miguPending) {
+        miguPending = p.resolveMigu().then(r => {
+          const u = new URL(r.url);
+          if (u.protocol !== "https:" || !u.hostname.endsWith(".miguvideo.com") || !u.pathname.endsWith(".ts")) {
+            throw new Error("咪咕未返回有效的视频分片");
+          }
+          miguCached = { url: r.url, until: Date.now() + 30000 };
+          return r.url;
+        }).finally(() => { miguPending = null; });
+      }
+      return miguPending;
+    },
+    async rejectMigu(url) {
+      if (miguCached && miguCached.url === url) miguCached = null;
+      const p = plugin("SpeedService");
+      if (p && p.rejectMigu) await p.rejectMigu({ url });
+    },
     // 预请求通知权限（App 启动时一次，避免首次开跑时弹系统对话框打断启动流程）
     async prepPermissions() {
       if (!isNative()) return false;

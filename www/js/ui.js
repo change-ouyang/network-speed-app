@@ -124,8 +124,8 @@
   // 原生后台泵与后台统计的状态（声明放在使用点之前，避免 TDZ）
   // handedOff：引擎是「被交棒停掉」的（不是用户/自动停止）——回前台必须把它重新跑起来
   let pumpOn = false, pumpTotal = 0, bgCount = 0, bgMs = 0, lastArmAt = 0, handedOff = false;
-  // 服务启动失败的真实原因（原生透传，进诊断行，真机排查有据可依）；电池优化豁免状态
-  let lastBgError = "", batteryExempted = true, batteryAsked = false;
+  // 服务启动失败的真实原因（原生透传，进诊断行，真机排查有据可依）
+  let lastBgError = "";
   function syncBgService() {
     if ((engine.running || pumpOn) && Store.getKeepBg()) {
       // 启动失败必须让用户知道（此前是静默失败，用户以为后台在跑其实没跑）
@@ -139,16 +139,6 @@
         } else {
           lastBgError = "";
           if (res && res.notifGranted === false) toast("未授予通知权限：后台将没有常驻通知，部分 ROM 会更容易杀后台", 4200);
-        }
-      });
-      // 电池优化豁免：HyperOS 冻结进程的头号对策。开跑时若未豁免，拉起系统授权对话框
-      //（每次启动最多问一次；用户拒绝后下次启动还会再问，因为这个权限不授，后台大概率白跑）
-      window.SpeedNative.batteryExempt(false).then((r) => {
-        batteryExempted = !!(r && r.exempt);
-        if (!batteryExempted && !batteryAsked) {
-          batteryAsked = true;
-          toast("建议允许「忽略电池优化」，否则息屏后系统可能冻结整个应用", 4200);
-          window.SpeedNative.batteryExempt(true);
         }
       });
       // 登记息屏自动接管参数：万一 WebView 没来得及触发 visibilitychange，原生也能在息屏时接管

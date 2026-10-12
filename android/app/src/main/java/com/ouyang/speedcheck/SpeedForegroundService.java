@@ -318,8 +318,11 @@ public class SpeedForegroundService extends Service {
             // 否则被中断的线程会一直活着（每轮前后台切换就泄漏一整套线程）
             while (pumpRunning && !Thread.currentThread().isInterrupted()) {
                 HttpURLConnection conn = null;
+                String mediaUrl = null;
                 try {
-                    conn = (HttpURLConnection) new URL(url).openConnection();
+                    mediaUrl = MiguSourceResolver.resolve(url);
+                    if (!pumpRunning || Thread.currentThread().isInterrupted()) break;
+                    conn = (HttpURLConnection) new URL(mediaUrl).openConnection();
                     conn.setConnectTimeout(15000);
                     conn.setReadTimeout(20000);
                     conn.setInstanceFollowRedirects(true);
@@ -331,6 +334,9 @@ public class SpeedForegroundService extends Service {
                     }
                     int code = conn.getResponseCode();
                     if (code >= 400) {
+                        if (code == 401 || code == 403 || code == 404 || code == 410 || code == 660 || code == 661) {
+                            MiguSourceResolver.rejected(url, mediaUrl);
+                        }
                         sleepQuietly(1500);
                         continue;
                     }
