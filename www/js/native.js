@@ -27,7 +27,9 @@
     async resolveMigu() {
       const p = plugin("SpeedService");
       if (!isNative() || !p || !p.resolveMigu) {
-        const e = new Error("需要安装新版 Android App，浏览器仅支持预览");
+        const e = new Error(isNative()
+          ? "App 原生咪咕组件未加载，请更新安装包后重新打开"
+          : "需要安装新版 Android App，浏览器仅支持预览");
         e.nodeUnavailable = true;
         throw e;
       }

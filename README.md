@@ -29,7 +29,7 @@
 ## 构建
 
 本地：`npm install && npx cap sync android`，然后 `cd android && ./gradlew assembleDebug`（需 Android SDK）。本地预览网页层：`npm run preview`。
-验证：`npm test` 检查动态节点、取消与计量；Android 环境下运行 `./gradlew testDebugUnitTest --tests com.ouyang.speedcheck.MiguSourceResolverTest` 检查原生解析、缓存、失效重取和分片路径。
+验证：`npm test` 检查动态节点、取消、计量和 Android 启动时的插件注册（需 JDK，通过生命周期桩运行真实 MainActivity）；Android 环境下运行 `./gradlew testDebugUnitTest --tests com.ouyang.speedcheck.MiguSourceResolverTest` 检查原生解析、缓存、失效重取和分片路径。云端打包前会执行这些回归检查。
 云端：push 到 GitHub main 分支，Actions 自动出 `app-debug.apk`（artifact: traffic-consumer-apk），手机侧载安装。
 版本号：CI 每次构建用 `github.run_number` 自动递增 `versionCode` 与 `versionName`（形如 `1.0.<n>`）；`android/app/build.gradle` 里的值只是本地兜底默认值。
 应用图标：替换 `assets/icon.png` 后执行 `npm run assets` 重新生成各密度图标与启动图。

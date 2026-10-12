@@ -82,6 +82,15 @@ test('网页预览立即说明 Android 限制，不下载官网 HTML', async () 
   assert.equal(e.totalBytes, 0);
 });
 
+test('原生插件缺失或版本过旧时，不把手机误报为浏览器', async () => {
+  for (const plugins of [{}, { SpeedService: {} }]) {
+    const c = setup();
+    c.Capacitor = { isNativePlatform: () => true, Plugins: plugins };
+    await assert.rejects(c.SpeedNative.resolveMigu(), error =>
+      error.nodeUnavailable && /原生咪咕组件未加载/.test(error.message) && !/浏览器/.test(error.message));
+  }
+});
+
 test('普通节点不经过咪咕解析', async () => {
   const c = setup({ resolveMigu: async () => { throw new Error('不应解析'); } }, async url => {
     assert.equal(url, 'https://example.com/file');
