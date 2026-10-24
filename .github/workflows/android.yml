@@ -74,7 +74,7 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           tag="v${VERSION}"
-          apk="apk/流量消耗器-v${VERSION}.apk"
+          apk="apk/TC1-v${VERSION}.apk"
           cp apk/app-debug.apk "$apk"
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber

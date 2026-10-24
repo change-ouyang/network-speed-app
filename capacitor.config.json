@@ -2,9 +2,6 @@
   "appId": "com.ouyang.speedcheck",
   "appName": "流量消耗器",
   "webDir": "www",
-  "android": {
-    "adjustMarginsForEdgeToEdge": "force"
-  },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true

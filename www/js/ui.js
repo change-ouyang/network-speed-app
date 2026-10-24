@@ -2,6 +2,17 @@
 (function () {
   "use strict";
 
+  // 致命错误可见化：白屏/黑屏时至少把报错摆出来（真机无控制台，用户截图即能定位）
+  window.addEventListener("error", function (e) {
+    var bar = document.getElementById("fatalBar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "fatalBar";
+      (document.body || document.documentElement).appendChild(bar);
+    }
+    bar.textContent = "脚本错误：" + (e.message || (e.error && e.error.message) || "unknown");
+  });
+
   const $ = (id) => document.getElementById(id);
   const engine = new window.SpeedEngine();
   let currentNode = null;   // {label, value}
@@ -122,6 +133,22 @@
     applyThreadUI(n);
     Store.set(Store.K.threadNum, n);
     engine.setThreads(n);
+  });
+
+  // ---------- 主题切换（铭牌栏对比度图标：跟随系统 → 暗色 → 亮色 循环） ----------
+  const THEMES = ["auto", "dark", "light"];
+  const THEME_NAMES = { auto: "跟随系统", dark: "暗色", light: "亮色" };
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = (t === "dark" || t === "light") ? t : "";
+    document.documentElement.style.colorScheme = t === "auto" ? "light dark" : t;
+  }
+  applyTheme(Store.get(Store.K.theme, "auto") || "auto");
+  $("btnTheme").addEventListener("click", () => {
+    const cur = Store.get(Store.K.theme, "auto") || "auto";
+    const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+    Store.set(Store.K.theme, next);
+    applyTheme(next);
+    toast("主题：" + THEME_NAMES[next]);
   });
 
   // ---------- 开关 ----------

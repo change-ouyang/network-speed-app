@@ -12,7 +12,8 @@
     customNodes: "customNodes", // [{label, value}]
     lastNode: "lastNode",    // 上次选择的节点 {label, value}
     acknowledged: "acknowledged", // 公告已知晓
-    geoCache: "geoCache"     // IP 信息缓存 {ip, text, ts}
+    geoCache: "geoCache",    // IP 信息缓存 {ip, text, ts}
+    theme: "theme"           // 显示主题 auto/dark/light（黑白切换）
   };
 
   function get(key, def) {
