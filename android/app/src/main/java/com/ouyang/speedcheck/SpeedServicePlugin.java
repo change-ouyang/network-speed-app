@@ -67,6 +67,26 @@ public class SpeedServicePlugin extends Plugin {
         }, "migu-invalidate").start();
     }
 
+    /** 活动页等外链：系统浏览器打开；只放行 http(s)，失败原因如实带回 JS。 */
+    @PluginMethod
+    public void openExternal(PluginCall call) {
+        JSObject r = new JSObject();
+        try {
+            String url = call.getString("url");
+            if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) {
+                throw new IllegalArgumentException("仅支持 http(s) 地址");
+            }
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            r.put("ok", true);
+        } catch (Throwable t) {
+            r.put("ok", false);
+            r.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+        call.resolve(r);
+    }
+
     /** 通知权限请求码：enable 与 prepPermissions 共用（同一个系统对话框，重复请求无害）。 */
     private static final int REQ_NOTIFICATIONS = 1001;
 

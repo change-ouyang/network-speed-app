@@ -193,6 +193,20 @@
       const p = plugin("Share");
       if (!isNative() || !p || !p.share) return false;
       try { await p.share(opts); return true; } catch (e) { return false; }
+    },
+    // 外链系统浏览器打开（活动页等）；浏览器预览回退 window.open
+    async openExternal(url) {
+      const u = String(url || "");
+      if (!/^https?:\/\//i.test(u)) return false;
+      const p = plugin("SpeedService");
+      if (isNative() && p && p.openExternal) {
+        try {
+          const r = await p.openExternal({ url: u });
+          return !!(r && r.ok);
+        } catch (e) { return false; }
+      }
+      try { return window.open(u, "_blank") ? true : false; }
+      catch (e) { return false; }
     }
   };
 })();

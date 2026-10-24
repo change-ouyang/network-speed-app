@@ -403,6 +403,32 @@
     unitDD.bind("ddLimit", LIMIT_UNITS);
   });
 
+  // ---------- 弹窗：定向活动 ----------
+  // 整理自原站「活动/权益」区：领取/抽奖类 H5，点条目用系统浏览器打开（部分需登录或跳转对应 APP）
+  $("btnActs").addEventListener("click", () => {
+    const rows = (window.MIGU_ACTIVITIES || []).map(a =>
+      "<div class='act-item' role='button' tabindex='0' data-url='" + escapeHTML(a.url) + "'>" +
+      "<span class='act-name'>" + escapeHTML(a.label) + "</span>" +
+      (a.note ? "<span class='act-note'>" + escapeHTML(a.note) + "</span>" : "") +
+      "<svg viewBox='0 0 24 24' width='14' height='14' aria-hidden='true'><path d='M5 19h4l9.5-9.5-4-4L5 15v4zM16.2 4.8a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L18 9l-4-4 2.2-2.2z' fill='currentColor'/></svg>" +
+      "</div>"
+    ).join("");
+    openModal("定向活动",
+      "<p>领取/抽奖类活动页，点击条目在系统浏览器打开。</p>" + rows +
+      "<p class='muted'>定向包速览：快游 50G · 视频 50G · 音乐 30G · 云盘 30G · 中移网大 20G（领取后立即生效，有效期 12 个月）。</p>",
+      [{ text: "关闭", cls: "plain", fn: closeModal }]);
+    document.querySelectorAll("#modalBody .act-item").forEach(el => {
+      const open = async () => {
+        const ok = await window.SpeedNative.openExternal(el.dataset.url);
+        if (!ok) toast("打开失败：请更新到最新版 App 后重试");
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+    });
+  });
+
   // ---------- 弹窗：用量预测 ----------
   $("btnPredict").addEventListener("click", () => {
     const p = engine.predict();
