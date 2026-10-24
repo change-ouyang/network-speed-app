@@ -74,11 +74,13 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           tag="v${VERSION}"
+          apk="apk/流量消耗器-v${VERSION}.apk"
+          cp apk/app-debug.apk "$apk"
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" apk/app-debug.apk --clobber
+            gh release upload "$tag" "$apk" --clobber
           else
-            gh release create "$tag" apk/app-debug.apk \
+            gh release create "$tag" "$apk" \
               --target "$COMMIT_SHA" \
               --title "流量消耗器 ${VERSION}" \
-              --notes "Android 安装包：点击下方 app-debug.apk 直接下载安装，无需解压。版本：${VERSION}；源码提交：${COMMIT_SHA}。"
+              --notes "Android 安装包：点击下方 APK 直接下载安装，无需解压。版本：${VERSION}；源码提交：${COMMIT_SHA}。"
           fi
