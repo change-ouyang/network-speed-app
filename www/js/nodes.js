@@ -25,16 +25,6 @@ window.NODE_GROUPS = [
       { label: "VIVO", value: "https://wwwstatic.vivo.com.cn/vivoportal/files/resource/funtouch/1651200648928/images/os2-jude-video.mp4" },
       { label: "UC/夸克", value: "https://image.uc.cn/s/uae/g/3o/broccoli/resource/202401/zry_video.mp4" }
     ]
-  },
-  {
-    label: "运营商",
-    options: [
-      { label: "咪咕快游", value: "https://gcache.migu.cn/prod/upload/game_resource/channel_for_homepage_game2/202412/0310/44/20241203104444766.mp4" },
-      { label: "咪咕视频", value: "https://img.cmvideo.cn/publish/noms/2026/02/26/1O7F0QHGQP2FD.gif" },
-      { label: "移动云盘", value: "https://img.mcloud.139.com/material_prod/material_media/20221128/1669626861087.png" },
-      { label: "联通门户", value: "https://iservice.10010.com/wt_manage/uploadImg/1709710916113.jpg" },
-      { label: "天翼云桌面", value: "https://desk.ctyun.cn:8999/desktop-prod/software/android_client/20/64/102010101/clouddesktoc_phone_2.1.1_452_prod_102010101_2.1.1_signed.apk" }
-    ]
   }
 ];
 
