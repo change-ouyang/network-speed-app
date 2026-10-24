@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T00:00:00+08:00",
+  "title": "Design System: 流量消耗器 TC-1（机柜面板 RACK PANEL）",
+  "extensions": {
+    "colorMeta": {
+      "accent-light": { "role": "primary", "displayName": "机房绿（亮·丝印）", "canonical": "#17573a", "tonalRamp": ["#07130d", "#0d2b1d", "#124030", "#17573a", "#2a7a55", "#4a9c74", "#7dbf9d", "#b7e0cd"] },
+      "accent-dark": { "role": "primary", "displayName": "VFD 荧光绿（暗·丝印）", "canonical": "#52e690", "tonalRamp": ["#04160c", "#0a3d21", "#125c34", "#1f8350", "#38b56c", "#52e690", "#8ff0b5", "#c8fad9"] },
+      "on-accent-light": { "role": "primary", "displayName": "绿上墨（亮）", "canonical": "#f4fff7" },
+      "on-accent-dark": { "role": "primary", "displayName": "绿上墨（暗）", "canonical": "#06130a" },
+      "led-green-light": { "role": "secondary", "displayName": "LED 绿（亮·灯泡）", "canonical": "#23a457", "tonalRamp": ["#06180d", "#0b3a1f", "#125c33", "#23a457", "#3fbf74", "#6cd694", "#a3ecbc", "#d8f7e4"] },
+      "led-green-dark": { "role": "secondary", "displayName": "LED 绿（暗·灯泡）", "canonical": "#37e07d", "tonalRamp": ["#03150a", "#0a3d20", "#0f5c31", "#1c8a4c", "#2cb965", "#37e07d", "#71eb9f", "#b3f6cf"] },
+      "danger-light": { "role": "tertiary", "displayName": "危险红（亮）", "canonical": "#9c2018", "tonalRamp": ["#1a0504", "#3a0d0a", "#5f1510", "#9c2018", "#c04336", "#d96a5b", "#ec9c8f", "#f7cec6"] },
+      "danger-dark": { "role": "tertiary", "displayName": "危险红（暗）", "canonical": "#ff7a6e", "tonalRamp": ["#1c0705", "#43110d", "#701f18", "#a33a30", "#d0574a", "#ff7a6e", "#ffa69c", "#ffd2cb"] },
+      "bg-light": { "role": "neutral", "displayName": "车间墙面（亮）", "canonical": "#d3d0c8" },
+      "bg-dark": { "role": "neutral", "displayName": "机房墙面（暗）", "canonical": "#0e1114" },
+      "chassis-light": { "role": "neutral", "displayName": "喷粉机壳（亮·哑光）", "canonical": "#e3e0d8", "tonalRamp": ["#1c1c19", "#3a3934", "#5b5a53", "#82817a", "#a9a89f", "#cbc9c0", "#e3e0d8", "#f4f2ec"] },
+      "chassis-dark": { "role": "neutral", "displayName": "拉丝机壳（暗）", "canonical": "#161b20", "tonalRamp": ["#05070a", "#0d1116", "#161b20", "#232b33", "#333d47", "#4a5663", "#6b7887", "#9aa5b1"] },
+      "panel-light": { "role": "neutral", "displayName": "模块面板（亮）", "canonical": "#eceae2" },
+      "panel-dark": { "role": "neutral", "displayName": "模块面板（暗）", "canonical": "#1a2026" },
+      "inset-light": { "role": "neutral", "displayName": "浅凹面（亮）", "canonical": "#f2f0e9" },
+      "inset-dark": { "role": "neutral", "displayName": "凹面（暗）", "canonical": "#12171c" },
+      "lcd-light": { "role": "neutral", "displayName": "LCD 面（亮·灰绿屏）", "canonical": "#c3cfba" },
+      "lcd-dark": { "role": "neutral", "displayName": "VFD 面（暗·近黑屏）", "canonical": "#0d130e" },
+      "lcd-ink-light": { "role": "neutral", "displayName": "LCD 墨（亮·深字）", "canonical": "#1e2b1d" },
+      "lcd-ink-dark": { "role": "neutral", "displayName": "VFD 墨（暗·荧光绿字）", "canonical": "#86ffb0" },
+      "socket-light": { "role": "neutral", "displayName": "插口空腔（亮）", "canonical": "#b7b4a9" },
+      "socket-dark": { "role": "neutral", "displayName": "插口空腔（暗）", "canonical": "#0b0e11" },
+      "text-light": { "role": "neutral", "displayName": "正文（亮）", "canonical": "#24272b" },
+      "text-dark": { "role": "neutral", "displayName": "正文（暗）", "canonical": "#e7eae3" },
+      "muted-light": { "role": "neutral", "displayName": "铭注文字（亮）", "canonical": "#5a5e56" },
+      "muted-dark": { "role": "neutral", "displayName": "铭注文字（暗）", "canonical": "#9aa39a" },
+      "hairline-light": { "role": "neutral", "displayName": "发丝线（亮·弱）", "canonical": "#b3afa3" },
+      "hairline-dark": { "role": "neutral", "displayName": "发丝线（暗·弱）", "canonical": "#2c343c" },
+      "hairline-strong-light": { "role": "neutral", "displayName": "发丝线（亮·强）", "canonical": "#8f8b7f" },
+      "hairline-strong-dark": { "role": "neutral", "displayName": "发丝线（暗·强）", "canonical": "#3c4650" },
+      "shadow-light": { "role": "neutral", "displayName": "机影（亮·暖褐）", "canonical": "rgba(46, 42, 30, .28)" },
+      "shadow-dark": { "role": "neutral", "displayName": "机影（暗）", "canonical": "rgba(0, 0, 0, .45)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "铭牌声部（display=铭牌组合的改编事实）", "purpose": "设备名与弹窗标题：粗体系统无衬线 + 下方等宽追踪大写型号代号并置。" },
+      "body": { "displayName": "正文", "purpose": "操作与说明文本；行高按语境 1.55（状态行）–1.7（弹窗长文）。" },
+      "label": { "displayName": "标签", "purpose": "模块中文主标与开关名。" },
+      "code": { "displayName": "丝印代号", "purpose": "LINK/PORTS/METERING/POWER/NET 等英文代号与端口号；等宽=机器写的字。" },
+      "meter": { "displayName": "读数", "purpose": "计量窗数字、IP、线程数、当前速率；tabular-nums，全机最大字号仅 1.12rem。" }
+    },
+    "shadows": [
+      { "name": "raised-panel-light", "value": "inset 0 1px 0 rgba(255,255,255,.28), 0 3px 10px rgba(46,42,30,.28)", "purpose": "模块与弹窗面板（凸面）；暗色下顶缘高光换 .045。" },
+      { "name": "raised-panel-dark", "value": "inset 0 1px 0 rgba(255,255,255,.045), 0 3px 10px rgba(0,0,0,.45)", "purpose": "暗色下的模块面板。" },
+      { "name": "button-lift", "value": "0 1px 0 rgba(255,255,255,.35), 0 2px 4px var(--shadow)", "purpose": "全部凸按钮与滑杆拇指；暗色高光换 .05–.06。" },
+      { "name": "well-inset", "value": "inset 0 2px 5px var(--shadow)", "purpose": "凹面输入介质：输入框、选择器触发区。" },
+      { "name": "well-deep", "value": "inset 0 3px 9px var(--shadow)", "purpose": "计量窗 LCD 深凹面。" },
+      { "name": "led-glow", "value": "0 0 5px var(--led-green)", "purpose": "LED 指示灯辉光——发光器件的介质本性，非装饰。" },
+      { "name": "vfd-glow-dark", "value": "text-shadow: 0 0 7px rgba(82, 230, 144, .3)", "purpose": "暗色 VFD 计量数字微辉；仅暗色。" },
+      { "name": "modal-lift", "value": "0 10px 34px rgba(0,0,0,.4)", "purpose": "维护盖板弹窗浮起。" }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "0.2s", "purpose": "器件状态默认过渡（灯、描边、箭头）；小件 .18s。" },
+      { "name": "port-blink", "value": "port-blink 1s steps(2, jump-none) infinite; delay: --d = ((port-1) % 8) × 0.09s", "purpose": "运行中端口 LED 按端口序错相闪烁。" },
+      { "name": "meter-wake", "value": "0.45s ease-out both; clip-path inset(0 100% 0 0) → 0 + brightness 1.6 → 1", "purpose": "全机唯一编排时刻：合电源时计量窗数字从左扫亮（≤600ms）。" },
+      { "name": "band-fill", "value": "transition: clip-path 0.4s", "purpose": "带宽 LED 段条经 --w 揭示。" },
+      { "name": "press", "value": ":active { transform: translateY(1px); box-shadow: none; }", "purpose": "按压=物理下沉，不是缩放。" },
+      { "name": "reduced-motion-kill", "value": "@media (prefers-reduced-motion: reduce) { animation: none !important; transition: none !important; }", "purpose": "闪烁/扫光全部停摆。" }
+    ],
+    "breakpoints": [
+      { "name": "chassis-max", "value": "max-width: 640px", "purpose": "竖屏单列机箱居中。" },
+      { "name": "floor", "value": "min-width: 320px", "purpose": "最小可用宽度。" },
+      { "name": "scheme", "value": "prefers-color-scheme: light | dark", "purpose": "双模式都是主场景，各自完整成套。" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Module Panel 模块",
+      "kind": "card",
+      "refersTo": "module-panel",
+      "description": "机箱标准槽位件：panel 底 + 弱线框 + 14px 圆角 + 顶缘高光凸影；module-tag 为中文主标 + 等宽丝印代号。",
+      "html": "<div class=\"ds-module\"><div class=\"ds-module-tag\"><span>线程配置</span><b>PORTS</b></div><div class=\"ds-module-body\">…</div></div>",
+      "css": ".ds-module { background: var(--panel); border: 1px solid var(--hairline); border-radius: 14px; padding: 11px 14px 13px; margin-top: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 3px 10px var(--shadow); } @media (prefers-color-scheme: dark) { .ds-module { box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 3px 10px var(--shadow); } } .ds-module-tag { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); } .ds-module-tag span { font-size: .84rem; font-weight: 600; color: var(--text); } .ds-module-tag b { font-family: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace; font-weight: 600; font-size: 9.5px; letter-spacing: .16em; color: var(--muted); }"
+    },
+    {
+      "name": "Meter Window 计量窗",
+      "kind": "custom",
+      "refersTo": "meter-window",
+      "description": "内嵌计量介质：亮=绿底 LCD 深字，暗=VFD 荧光绿字微辉；读数钉在窗底，tabular-nums。",
+      "html": "<div class=\"ds-meter\"><div class=\"ds-meter-head\"><span>平均速度</span></div><div class=\"ds-meter-val\">12.4 MB/s</div></div>",
+      "css": ".ds-meter { background: var(--lcd); border: 1px solid var(--hairline-strong); border-radius: 8px; padding: 8px 9px 10px; min-height: 84px; box-shadow: inset 0 3px 9px var(--shadow); display: flex; flex-direction: column; } .ds-meter-head { display: flex; align-items: center; justify-content: space-between; font-size: .74rem; color: var(--lcd-ink); opacity: .88; } @media (prefers-color-scheme: dark) { .ds-meter-head { color: var(--muted); opacity: 1; } } .ds-meter-val { margin-top: auto; font-family: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 1.12rem; font-weight: 700; color: var(--lcd-ink); white-space: nowrap; letter-spacing: -0.01em; } @media (prefers-color-scheme: dark) { .ds-meter-val { text-shadow: 0 0 7px rgba(82, 230, 144, .3); } }"
+    },
+    {
+      "name": "Port Array 端口阵列",
+      "kind": "custom",
+      "refersTo": "port-socket",
+      "description": "线程配置的物理化身：端口号铸在插口内、LED 条压底部；运行中按 --d 错相闪烁。",
+      "html": "<div class=\"ds-ports running\"><i class=\"ds-port on\" data-port=\"1\"></i><i class=\"ds-port on\" data-port=\"2\" style=\"--d:.09s\"></i><i class=\"ds-port\" data-port=\"3\"></i><i class=\"ds-port\" data-port=\"4\"></i></div>",
+      "css": ".ds-ports { display: grid; grid-template-columns: repeat(8, 1fr); gap: 7px 6px; background: var(--inset); border: 1px solid var(--hairline); border-radius: 9px; padding: 10px 8px; box-shadow: inset 0 2px 6px var(--shadow); } .ds-port { position: relative; display: block; height: 26px; background: var(--socket); border: 1px solid var(--hairline-strong); border-radius: 3px; } .ds-port::before { content: attr(data-port); position: absolute; top: 2.5px; left: 0; right: 0; text-align: center; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 7px; line-height: 1; color: var(--muted); } .ds-port::after { content: ''; position: absolute; left: 3px; right: 3px; bottom: 3px; height: 3.5px; border-radius: 1px; background: transparent; transition: background .18s, box-shadow .18s; } .ds-port.on::after { background: var(--led-green); box-shadow: 0 0 4px var(--led-green); } .ds-ports.running .ds-port.on::after { animation: ds-port-blink 1s steps(2, jump-none) infinite; animation-delay: var(--d, 0s); } .ds-ports.running .ds-port.on { border-color: color-mix(in srgb, var(--led-green) 45%, var(--hairline-strong)); } @keyframes ds-port-blink { 50% { background: transparent; box-shadow: none; } } @media (prefers-reduced-motion: reduce) { .ds-ports.running .ds-port.on::after { animation: none !important; } }"
+    },
+    {
+      "name": "Power Button 电源钮",
+      "kind": "button",
+      "refersTo": "power-button",
+      "description": "108px 工业主开关：凹面底 + 虚线护圈；运行中（.running）钮缘与护圈转 LED 绿。",
+      "html": "<button class=\"ds-power\"><span class=\"ds-power-guard\"></span><svg viewBox=\"0 0 24 24\" width=\"42\" height=\"42\"><path d=\"M12 3.2v8.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\"/><path d=\"M7.6 6.3a6.9 6.9 0 1 0 8.8 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\"/></svg></button>",
+      "css": ".ds-power { position: relative; flex: none; width: 108px; height: 108px; border-radius: 16px; border: 1px solid var(--hairline-strong); background: var(--inset); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 10px var(--shadow); transition: border-color .2s, box-shadow .2s; } @media (prefers-color-scheme: dark) { .ds-power { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 4px 10px var(--shadow); } } .ds-power:active { transform: translateY(1px); } .ds-power:focus-visible { outline: 2px solid var(--led-green); outline-offset: 2px; } .ds-power-guard { position: absolute; inset: 7px; border: 1px dashed var(--hairline-strong); border-radius: 11px; opacity: .5; transition: border-color .2s, opacity .2s; } .ds-power.running { border-color: var(--led-green); } .ds-power.running .ds-power-guard { border-color: var(--led-green); opacity: .7; }"
+    },
+    {
+      "name": "DIP Switch 拨码开关",
+      "kind": "custom",
+      "refersTo": "dip-switch",
+      "description": "方形滑槽 + 方形滑块两刻位；拨上 translateX(20px)，选中描边转 LED 绿。",
+      "html": "<label class=\"ds-dip\"><input type=\"checkbox\" checked><span class=\"ds-dip-ui\"></span><span class=\"ds-dip-name\">后台运行</span></label>",
+      "css": ".ds-dip { display: flex; align-items: center; gap: 9px; cursor: pointer; font-size: .9rem; } .ds-dip input { display: none; } .ds-dip-ui { width: 42px; height: 22px; flex: none; border-radius: 4px; background: var(--socket); border: 1px solid var(--hairline-strong); box-shadow: inset 0 2px 4px var(--shadow); position: relative; transition: border-color .2s; } .ds-dip-ui::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 3px; background: var(--panel); border: 1px solid var(--hairline-strong); box-shadow: 0 1px 0 rgba(255,255,255,.3), 0 1px 3px var(--shadow); transition: transform .18s, border-color .2s; } .ds-dip input:checked + .ds-dip-ui { border-color: var(--led-green); } .ds-dip input:checked + .ds-dip-ui::after { transform: translateX(20px); border-color: var(--led-green); } .ds-dip-name { color: var(--text); }"
+    },
+    {
+      "name": "Select Trigger 选择器触发区",
+      "kind": "input",
+      "refersTo": "field-inset",
+      "description": "凹面输入介质：inset 底 + 内凹阴影；展开箭头随 .open 旋转；focus-visible 用 Accent 内描边。",
+      "html": "<button type=\"button\" class=\"ds-select\"><span>咪咕视频 · 官方调度链</span><svg class=\"ds-select-arrow\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z\" fill=\"currentColor\"/></svg></button>",
+      "css": ".ds-select { width: 100%; display: flex; align-items: center; gap: 8px; border: 1px solid var(--hairline-strong); border-radius: 9px; padding: 10px 12px; background: var(--inset); font-size: .95rem; color: var(--text); box-shadow: inset 0 2px 5px var(--shadow); cursor: pointer; } .ds-select:focus { outline: none; } .ds-select:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; } .ds-select-arrow { margin-left: auto; color: var(--muted); transition: transform .2s; } .ds-select.open .ds-select-arrow { transform: rotate(180deg); }"
+    },
+    {
+      "name": "Action / Primary Button 动作钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "m-btn 语法：panel 底 + 强线框 + 顶缘高光，按压下沉；primary 变体 Accent 底 + 绿上墨（暗色反转）。",
+      "html": "<button class=\"ds-btn ds-btn-primary\">确定</button> <button class=\"ds-btn\">取消</button>",
+      "css": ".ds-btn { border: 1px solid var(--hairline-strong); border-radius: 9px; padding: 8px 22px; font-size: .92rem; cursor: pointer; background: var(--inset); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.26), 0 2px 4px var(--shadow); } @media (prefers-color-scheme: dark) { .ds-btn { box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 2px 4px var(--shadow); } } .ds-btn:active { transform: translateY(1px); box-shadow: none; } .ds-btn:focus-visible { outline: 2px solid var(--led-green); outline-offset: 2px; } .ds-btn-primary { background: var(--accent-deep); color: #f4fff7; border-color: var(--accent-deep); } @media (prefers-color-scheme: dark) { .ds-btn-primary { background: var(--accent); color: #06130a; border-color: var(--accent); } }"
+    },
+    {
+      "name": "Maintenance Cover Modal 维护盖板",
+      "kind": "custom",
+      "refersTo": "module-panel",
+      "description": "弹窗即检修盖板：上下各一对螺丝圆点（radial-gradient），标题居中，正文 0.92rem/1.7。",
+      "html": "<div class=\"ds-modal\"><div class=\"ds-modal-title\">用量上限</div><div class=\"ds-modal-body\">本次测试用量达到上限后自动停止。</div></div>",
+      "css": ".ds-modal { background: var(--panel); border: 1px solid var(--hairline-strong); border-radius: 14px; max-width: 400px; box-shadow: 0 10px 34px rgba(0,0,0,.4); position: relative; } .ds-modal::before, .ds-modal::after { content: ''; position: absolute; left: 9px; right: 9px; height: 5px; background-image: radial-gradient(circle, var(--hairline-strong) 0 2.5px, transparent 3px), radial-gradient(circle, var(--hairline-strong) 0 2.5px, transparent 3px); background-repeat: no-repeat; background-position: left center, right center; background-size: 5px 5px; pointer-events: none; } .ds-modal::before { top: 9px; } .ds-modal::after { bottom: 9px; } .ds-modal-title { text-align: center; font-weight: 700; padding: 15px 16px 8px; font-size: 1.02rem; letter-spacing: .02em; color: var(--text); } .ds-modal-body { padding: 8px 18px; line-height: 1.7; font-size: .92rem; color: var(--text); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "机柜面板 RACK PANEL",
+    "overview": "这台设备不是一张网页，是一台你亲手操作的机架网元。类别默认的蓝色渐变仪表盘测速脸被整页拒绝：没有 hero 大数字漂浮在背景上，没有卡片阴影浮在白底上——数字住在内嵌的计量窗里，开关是真实的 DIP 拨码，弹窗是四颗螺丝的维护盖板。去掉全部内容文案，仅凭拉丝机壳、风扇格栅、端口阵列与电源钮，也能认出这是同一台机器。\n\n两种模式是两间机房：暗色是机房夜灯下的近黑拉丝机壳，亮色是车间日光下的喷粉米灰机箱。两套都是主场景，各自完整成套，不是对方的反色。\n\n深度是物理模具的方向：凹下去的是要读/要填的介质，凸起来的是可操作的表面。全机只有一次编排时刻——合上电源时计量窗数字从左扫亮；其余一切动效都是器件状态，且在 prefers-reduced-motion 下全部停摆。",
+    "keyCharacteristics": [
+      "双模式机壳材质：暗=拉丝（横向发丝纹），亮=喷粉哑光；纹理只属于暗壳",
+      "LED 三色语义：绿=活动/在线，琥珀=警示/上限，红=危险；绝不装饰",
+      "计量窗介质二象：暗=VFD 绿字辉光，亮=绿底 LCD 深字；数字只住在窗里",
+      "全系统字体离线：系统无衬线 + 等宽两只声部；display=铭牌组合而非独立字体",
+      "状态总线：body.running 一个类驱动 RUN 灯、端口错相闪烁、电源钮描边、计量窗唤醒"
+    ],
+    "rules": [
+      { "name": "LED 三色律（The LED Tricolor Rule）", "body": "绿=活动/在线，琥珀=警示/上限，红=危险。LED 色永不作装饰、永不当 Accent 用；反之 Accent 绿也永不点亮灯泡。LED 的辉光是发光器件的介质本性，不算「加 glow」。", "section": "colors" },
+      { "name": "介质二象律（The Meter Duality Rule）", "body": "计量窗在两种模式下是两种物理介质：暗色是 VFD 荧光管，亮色是经典绿底 LCD。改计量窗时先问「这块屏是什么介质」。", "section": "colors" },
+      { "name": "两绿分工律", "body": "Accent 绿是丝印/数据色，LED 绿是灯泡色；任何表面不得同时消费两种绿。", "section": "colors" },
+      { "name": "数字入窗律（The Numbers-Live-in-Windows Rule）", "body": "读数永远是 tabular-nums 等宽、永远住在计量窗/铭牌等实体介质里；字号阶梯因此极压缩（7px–1.12rem），层级靠介质与声部区分，不靠放大。", "section": "typography" },
+      { "name": "铭牌即 Display 律（The Nameplate-Is-Display Rule）", "body": "任何新表面的「标题」= 中文粗体名 + 等宽追踪英文代号的组合，而不是换一款 display 字体或加大字号。", "section": "typography" },
+      { "name": "凹读凸作律（The Recess-Reads Rule）", "body": "凹面=读数或填充的介质，凸面=可以按的表面；深度的方向就是可供性的方向。", "section": "elevation" },
+      { "name": "顶缘高光律", "body": "每件凸面带 1px 顶缘 specular 内阴影；亮色 .26–.35，暗色压到 .05 上下——夜灯机房里没有高光。", "section": "elevation" },
+      { "name": "唯一编排时刻律（The One Authored Moment Rule）", "body": "全机只有 meter-wake 一次编排（≤600ms）；其余动效全是器件状态。prefers-reduced-motion 下动画与过渡全部停摆。", "section": "components" },
+      { "name": "状态总线律", "body": "运行态只通过 body.running 一个类广播；JS 不逐件改样式，只写类与 --d/--pct/--w 三个自定义属性。", "section": "components" }
+    ],
+    "dos": [
+      "Do LED 严格三色语义：绿=活动/在线、琥珀=警示/上限、红=危险；新指示灯先归语义再取色。",
+      "Do 数字一律 Meter 声部（等宽 + tabular-nums）并住进计量窗/铭牌介质里。",
+      "Do 新「标题」用铭牌组合：中文粗体名 + 等宽追踪大写英文代号。",
+      "Do 器件先定凹凸：读/填的凹下去配内阴影，可按的凸起来配顶缘高光；按压一律 translateY(1px) 下沉。",
+      "Do 双模式成对交付：每个颜色/高光/介质效果亮暗各验一遍（拉丝只验暗壳，LCD 辉光只验暗窗）。",
+      "Do 图表/Canvas 从 :root 实读 --accent/--muted，与世界保持同源。"
+    ],
+    "donts": [
+      "Don't 引入蓝色仪表盘脸：类别默认的蓝色渐变测速页是本世界的反面（图表 JS 里遗留的 #409eff 兜底色是死代码，不是系统色）。",
+      "Don't 给非发光表面加辉光；LED/VFD 的光是介质本性，不是装饰手法。",
+      "Don't 用 LED 绿画丝印/数据，或用 Accent 绿点灯——两绿分工不可混。",
+      "Don't 在亮色机壳上加拉丝或高光纹理；喷粉面是哑光的。",
+      "Don't 超过一次编排时刻或绕过 prefers-reduced-motion 静音。",
+      "Don't 引入外部字体/图标 CDN——离线约束（PRODUCT.md），全部系统栈 + 内联 SVG。",
+      "Don't 把 LED 色或 Accent 用作大面积底色；发光色是小面积的器件语言。"
+    ]
+  }
+}

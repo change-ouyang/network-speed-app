@@ -8,103 +8,152 @@
   <link rel="stylesheet" href="css/theme.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4a8 8 0 0 0-8 8c0 1.5.4 2.9 1.1 4.1l-1.5 1.5A10 10 0 1 1 12 2a10 10 0 0 1 8.4 4.6l-1.5 1.5A8 8 0 0 0 12 4z" fill="#fff" opacity=".9"/><path d="M12 6a6 6 0 0 0-6 6c0 1.2.3 2.3.9 3.2l7.8-7.8A6 6 0 0 0 12 6z" fill="#fff"/><path d="M14.3 9.7 20 4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
-      <span class="brand-name">流量消耗器</span>
+  <!--
+  THESIS: 这台「流量消耗器」不是一张网页，是一台你亲手操作的机架网元设备；
+  类别默认的蓝色渐变仪表盘测速脸被整页拒绝，数字不是装饰性 hero，而是设备
+  面板上的物理计量窗。
+  OWN-WORLD: 近黑拉丝机壳（浅色模式为喷粉米灰机箱）＋丝印铭牌＋风扇格栅纹；
+  LED 绿只表示活动/在线，琥珀只表示警示/上限，红只表示危险；计量窗为内嵌
+  LCD（暗：VFD 绿字；亮：经典绿底深字）；端口阵列、DIP 开关、电源钮、维护
+  盖板弹窗——去掉全部内容也能认出这是同一台设备。
+  STORY: 用户读懂这是一台烧流量的机器：选链路（槽位模块）→配置端口数（端
+  口阵列）→合上电源（电源钮）→读计量窗；运行中 RUN 灯亮、端口灯随线程闪
+  烁；息屏交棒后台泵时状态行说明一切。
+  FIRST VIEWPORT: 竖屏单列：顶部设备铭牌栏（型号名＋PWR/RUN 状态灯＋手册钮）
+  →下行链路槽位 →32 端口 LED 阵列（线程滑杆即端口配置）→三块计量窗（用
+  量/速率/带宽，等宽数码字）→电源模块（工业电源钮＋两只 DIP 开关）；主操
+  作（电源钮）位于首屏下半部拇指区。
+  FORM: 机柜面板（rack equipment faceplate），共鸣序第 7/7，seed key d2d18393。
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the
+  finish review, the verdict, and DESIGN.md.
+  -->
+
+  <header class="nameplate">
+    <div class="vents" aria-hidden="true"></div>
+    <div class="np-main">
+      <div class="np-title">流量消耗器</div>
+      <div class="np-model">TC-1 · THROUGHPUT CONSUMER</div>
     </div>
-    <button class="ghost-btn" id="btnAbout">说明</button>
+    <div class="np-lamps" aria-hidden="true">
+      <span class="lamp lamp-pwr"></span>
+      <span class="lamp lamp-run"></span>
+    </div>
+    <button class="manual-btn" id="btnAbout" aria-label="说明">说明</button>
   </header>
 
-  <main class="page">
-    <section class="card">
-      <div class="addr-head">
-        <span class="addr-label">测试地址：</span>
-        <button class="icon-btn" id="btnCopyUrl" title="复制当前测试链接" aria-label="复制当前测试链接">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor"/></svg>
-        </button>
-        <button class="icon-btn" id="btnShare" title="分享测试地址" aria-label="分享测试地址">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z" fill="currentColor"/></svg>
-        </button>
-        <button class="icon-btn" id="btnCustom" title="自定义地址" aria-label="自定义地址">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>
-        </button>
-      </div>
+  <main class="chassis">
 
-      <div class="select" id="sel">
-        <div class="select-trigger" role="button" tabindex="0" aria-label="选择测试地址" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="14" height="14" class="link-ic"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 1 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z" fill="currentColor"/></svg>
-          <span id="selLabel">微软商店</span>
-          <svg class="arrow" viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
+    <!-- 槽位模块：下行链路选择 -->
+    <section class="module slot-module">
+      <div class="module-tag"><span>下行链路</span><b>LINK</b>
+        <div class="slot-actions">
+          <button class="panel-btn" id="btnCopyUrl" aria-label="复制当前测试链接" title="复制当前测试链接"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor"/></svg></button>
+          <button class="panel-btn" id="btnShare" aria-label="分享测试地址" title="分享测试地址"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z" fill="currentColor"/></svg></button>
+          <button class="panel-btn" id="btnCustom" aria-label="自定义地址" title="自定义地址"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button>
         </div>
-        <div class="select-panel" id="selPanel"></div>
       </div>
+      <div class="slot-body">
+        <div class="select" id="sel">
+          <button type="button" class="select-trigger" aria-label="选择测试地址">
+            <svg class="link-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z" fill="currentColor"/></svg>
+            <span id="selLabel">—</span>
+            <svg class="arrow" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg>
+          </button>
+          <div class="select-panel" id="selPanel"></div>
+        </div>
+      </div>
+    </section>
 
+    <!-- 端口阵列模块：线程配置 -->
+    <section class="module port-module">
+      <div class="module-tag"><span>线程配置</span><b>PORTS</b></div>
+      <div class="port-grid" id="portGrid" aria-hidden="true">
+        <i data-port="1"></i><i data-port="2"></i><i data-port="3"></i><i data-port="4"></i><i data-port="5"></i><i data-port="6"></i><i data-port="7"></i><i data-port="8"></i>
+        <i data-port="9"></i><i data-port="10"></i><i data-port="11"></i><i data-port="12"></i><i data-port="13"></i><i data-port="14"></i><i data-port="15"></i><i data-port="16"></i>
+        <i data-port="17"></i><i data-port="18"></i><i data-port="19"></i><i data-port="20"></i><i data-port="21"></i><i data-port="22"></i><i data-port="23"></i><i data-port="24"></i>
+        <i data-port="25"></i><i data-port="26"></i><i data-port="27"></i><i data-port="28"></i><i data-port="29"></i><i data-port="30"></i><i data-port="31"></i><i data-port="32"></i>
+      </div>
       <div class="thread-row">
-        <span class="thread-label">线程数：<b id="threadNum">8</b></span>
-        <input type="range" id="threadSlider" min="1" max="32" step="1" value="8">
+        <label class="thread-label" for="threadSlider">线程数</label>
+        <input type="range" id="threadSlider" min="1" max="32" step="1" value="8" aria-label="线程数">
+        <output class="thread-num" id="threadNum">8</output>
       </div>
+    </section>
 
-      <div class="switch-row">
-        <label class="switch-wrap">
-          <input type="checkbox" id="swKeepBg">
-          <span class="switch-ui"></span>
-          <span>保持后台运行</span>
-        </label>
-        <label class="switch-wrap">
-          <input type="checkbox" id="swAuto">
-          <span class="switch-ui"></span>
-          <span>自动运行</span>
-        </label>
-      </div>
-
+    <!-- 计量模块：三块计量窗 -->
+    <section class="module meter-module">
+      <div class="module-tag"><span>计量</span><b>METERING</b></div>
       <div class="metrics">
-        <div class="metric" id="mUsedTile" role="button" tabindex="0" aria-label="总使用量，进入页面自动清零，点击清零">
-          <div class="metric-head"><span>总使用量</span><button class="icon-btn sm" id="btnMaxUse" title="设置用量上限" aria-label="设置用量上限"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
-          <div class="metric-val" id="mUsed">0 B</div>
+        <div class="meter" id="mUsedTile" role="button" tabindex="0" aria-label="总使用量，进入页面自动清零，点击清零">
+          <div class="meter-head"><span>总使用量</span><button class="pin-btn" id="btnMaxUse" title="设置用量上限" aria-label="设置用量上限"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
+          <div class="meter-val" id="mUsed">0 B</div>
         </div>
-        <div class="metric">
-          <div class="metric-head"><span id="mSpeedLabel">平均速度</span><button class="icon-btn sm" id="btnPredict" title="用量预测" aria-label="用量预测"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h2v-2H7v2zm0-4h2V7H7v2zm-4 8h2v-2H3v2zm12-4h2v-2h-2v2zm4-4h2V7h-2v2zm0 4h2v-2h-2v2zm0 4h2v-2h-2v2zm-8 0h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm-4 0h2V7H7v2z" fill="currentColor"/></svg></button></div>
-          <div class="metric-val accent" id="mSpeed">-</div>
+        <div class="meter">
+          <div class="meter-head"><span id="mSpeedLabel">平均速度</span><button class="pin-btn" id="btnPredict" title="用量预测" aria-label="用量预测"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h2v-2H7v2zm0-4h2V7H7v2zm-4 8h2v-2H3v2zm12-4h2v-2h-2v2zm4-4h2V7h-2v2zm0 4h2v-2h-2v2zm0 4h2v-2h-2v2zm-8 0h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm-4 0h2V7H7v2z" fill="currentColor"/></svg></button></div>
+          <div class="meter-val accent" id="mSpeed">-</div>
         </div>
-        <div class="metric">
-          <div class="metric-head"><span>网络带宽</span><button class="icon-btn sm" id="btnLimit" title="限速设置" aria-label="限速设置"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
-          <div class="metric-val" id="mBand">0 Mbps</div>
-          <div class="band-bar"><i id="bandBar"></i></div>
+        <div class="meter">
+          <div class="meter-head"><span>网络带宽</span><button class="pin-btn" id="btnLimit" title="限速设置" aria-label="限速设置"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg></button></div>
+          <div class="meter-val" id="mBand">0 Mbps</div>
+          <div class="band-bar" role="img" aria-label="带宽进度"><i id="bandBar"></i></div>
         </div>
       </div>
+    </section>
 
-      <div class="play-zone">
-        <button class="play-btn" id="btnPlay" aria-label="开始/暂停">
-          <svg id="icPlay" viewBox="0 0 24 24" width="52" height="52"><path d="M8 5v14l11-7z" fill="#fff"/></svg>
-          <svg id="icPause" viewBox="0 0 24 24" width="44" height="44" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z" fill="#fff"/></svg>
+    <!-- 电源模块：主开关与 DIP 配置 -->
+    <section class="module power-module">
+      <div class="module-tag"><span>电源与开关</span><b>POWER</b></div>
+      <div class="power-row">
+        <button class="power-btn" id="btnPlay" aria-label="开始/暂停">
+          <span class="power-guard" aria-hidden="true"></span>
+          <svg id="icPlay" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3.2v8.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/><path d="M7.6 6.3a6.9 6.9 0 1 0 8.8 0" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
+          <svg id="icPause" viewBox="0 0 24 24" width="34" height="34" style="display:none" aria-hidden="true"><path d="M12 3.2v8.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M7.2 5.8a7.4 7.4 0 1 0 9.6 0" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
         </button>
-        <button class="icon-btn expand" id="btnChart" title="全屏图表" aria-label="全屏图表">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
-        </button>
+        <div class="power-side">
+          <label class="switch-wrap">
+            <input type="checkbox" id="swKeepBg">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span class="switch-name">后台运行</span>
+          </label>
+          <label class="switch-wrap">
+            <input type="checkbox" id="swAuto">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span class="switch-name">自动运行</span>
+          </label>
+        </div>
       </div>
+      <button class="monitor-btn" id="btnChart" aria-label="全屏图表">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
+        监视窗 MONITOR
+      </button>
       <div class="run-status" id="runStatus"></div>
     </section>
 
-    <section class="ip-card" id="ipCard">
+    <!-- 资产铭牌：网络地址 -->
+    <section class="asset-plate" id="ipCard">
+      <div class="plate-tag">网络地址 <b>NET</b></div>
       <div class="ip-addr" id="ipAddr">查询中…</div>
       <div class="ip-geo" id="ipGeo">-</div>
+      <div class="plate-serial" aria-hidden="true">
+        <svg viewBox="0 0 96 20" width="96" height="20"><path fill="currentColor" d="M0 0h2v20H0zM4 0h1v20H4zM8 0h3v20H8zM14 0h1v20h-1zM17 0h2v20h-2zM22 0h1v20h-1zM25 0h3v20h-3zM31 0h1v20h-1zM34 0h2v20h-2zM39 0h1v20h-1zM42 0h3v20h-3zM48 0h1v20h-1zM51 0h2v20h-2zM56 0h1v20h-1zM59 0h3v20h-3zM65 0h1v20h-1zM68 0h2v20h-2zM73 0h1v20h-1zM76 0h3v20h-3zM82 0h1v20h-1zM85 0h2v20h-2zM90 0h1v20h-1zM93 0h3v20h-3z"/></svg>
+        <span>TC1-0731</span>
+      </div>
     </section>
 
     <p class="disclaimer">本工具仅用于流量消耗与网络速率自查，请勿用于非法用途，使用本工具造成的一切后果由用户承担！</p>
   </main>
 
-  <!-- 全屏图表 -->
+  <!-- 监视窗：全屏速率图表 -->
   <div class="chart-overlay" id="chartOverlay">
     <div class="chart-head">
       <span>实时速率</span>
       <span class="chart-now" id="chartNow">-</span>
-      <button class="icon-btn" id="btnChartClose" title="关闭图表" aria-label="关闭图表"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
+      <button class="panel-btn" id="btnChartClose" aria-label="关闭图表"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
     </div>
     <canvas id="chartCanvas"></canvas>
   </div>
 
-  <!-- 通用弹窗 -->
+  <!-- 维护盖板：通用弹窗 -->
   <div class="modal-mask" id="modalMask">
     <div class="modal" id="modal">
       <div class="modal-title" id="modalTitle"></div>

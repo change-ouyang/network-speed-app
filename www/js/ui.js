@@ -97,11 +97,23 @@
   });
 
   // ---------- 线程数 ----------
+  // 端口阵列即线程可视化：亮灯数量 = 线程数，运行中按端口序错相闪烁
+  function updatePortGrid() {
+    const grid = $("portGrid");
+    if (!grid) return;
+    const n = engine.threads;
+    for (const p of grid.children) {
+      const port = parseInt(p.dataset.port, 10);
+      p.classList.toggle("on", port <= n);
+      if (!p.style.getPropertyValue("--d")) p.style.setProperty("--d", ((port - 1) % 8 * 0.09).toFixed(2) + "s");
+    }
+  }
   function applyThreadUI(n) {
     $("threadNum").textContent = n;
     const slider = $("threadSlider");
     slider.value = n;
     slider.style.setProperty("--pct", ((n - 1) / 31 * 100).toFixed(1) + "%");
+    updatePortGrid();
   }
   $("threadSlider").addEventListener("input", (e) => {
     const n = parseInt(e.target.value, 10);
@@ -168,7 +180,7 @@
     $("mSpeed").textContent = (e.running || e.avgSpeed > 0) ? window.formatBytes(shown, 0) : "-";
     const mbps = e.peakSpeed * 8 / 1e6;
     $("mBand").textContent = (mbps >= 100 ? Math.round(mbps) : mbps.toFixed(1)) + " Mbps";
-    $("bandBar").style.width = Math.min(100, mbps / 500 * 100).toFixed(1) + "%";
+    $("bandBar").style.setProperty("--w", Math.min(100, mbps / 500 * 100).toFixed(1) + "%");
   }
   // 累计用量持久化：5 秒一次 + 停止时强制落盘，页面被系统回收重载后不会丢
   let lastPersistAt = 0;
@@ -213,6 +225,10 @@
   function refreshPlayUI() {
     $("icPlay").style.display = engine.running ? "none" : "";
     $("icPause").style.display = engine.running ? "" : "none";
+    // 机柜状态灯与端口闪烁都挂在这个类上（电源钮描边、RUN 灯、端口 blink）
+    document.body.classList.toggle("running", engine.running);
+    const grid = $("portGrid");
+    if (grid) grid.classList.toggle("running", engine.running);
     if (engine.running) $("runStatus").textContent = "";
     if (!engine.running) {
       $("mSpeedLabel").textContent = "平均速度";
@@ -234,31 +250,30 @@
   });
 
   // ---------- 弹窗：用量上限 ----------
-  function parseBytesInput(str) {
-    if (!str) return 0;
-    // 允许末尾带 "/s"（速率单位），这样「10MB/s」「10 MB/s」「10MB」都能正确解析
-    const s = String(str).trim().replace(/\/s$/i, "").trim();
-    const m = /^([\d.]+)\s*(B|KB|MB|GB|TB)?$/i.exec(s);
-    if (!m) return NaN;
-    const mult = { "": 1, B: 1, KB: 1024, MB: 1048576, GB: 1073741824, TB: 1 << 40 }[(m[2] || "").toUpperCase()];
-    return Math.round(parseFloat(m[1]) * mult);
-  }
   $("btnMaxUse").addEventListener("click", () => {
     const cur = Store.getMaxUse();
+    const isGB = cur >= 1073741824;
+    const num = cur > 0 ? String(+ (cur / (isGB ? 1073741824 : 1048576)).toFixed(2)) : "";
     openModal("用量上限",
-      '<p>本次测试用量达到上限后自动停止（累计总使用量不受影响）。</p>' +
-      '<input class="m-input" id="inMaxUse" placeholder="留空则无上限" value="' + (cur > 0 ? window.formatBytes(cur, 1) : "") + '">' +
-      '<p class="muted">支持 500MB、2GB 或字节数</p>',
+      '<p>本次测试用量达到上限后自动停止。</p>' +
+      '<div class="unit-row"><input class="m-input" id="inMaxUse" inputmode="decimal" placeholder="留空则无上限" value="' + num + '">' +
+      '<select class="m-select" id="unitMaxUse"><option value="1048576"' + (isGB ? "" : " selected") + '>MB</option><option value="1073741824"' + (isGB ? " selected" : "") + '>GB</option></select></div>',
       [
         { text: "取消", cls: "plain", fn: closeModal },
         {
           text: "确定", fn: () => {
-            const v = parseBytesInput($("inMaxUse").value || "");
-            if (isNaN(v)) { toast("格式不正确"); return; }
+            const raw = $("inMaxUse").value.trim();
+            if (!raw) {
+              Store.set(Store.K.maxUse, 0); engine.maxUse = 0;
+              closeModal(); toast("已清除用量上限"); return;
+            }
+            const n = parseFloat(raw);
+            if (!(n > 0) || isNaN(n)) { toast("请输入正数"); return; }
+            const v = Math.round(n * parseInt($("unitMaxUse").value, 10));
             Store.set(Store.K.maxUse, v);
             engine.maxUse = v;
             closeModal();
-            toast(v > 0 ? "用量上限已设置" : "已清除用量上限");
+            toast("用量上限已设置：" + window.formatBytes(v, 1));
           }
         }
       ]);
@@ -267,20 +282,28 @@
   // ---------- 弹窗：限速 ----------
   $("btnLimit").addEventListener("click", () => {
     const cur = Store.getSpeedLimit();
+    const isGB = cur >= 1073741824;
+    const num = cur > 0 ? String(+ (cur / (isGB ? 1073741824 : 1048576)).toFixed(2)) : "";
     openModal("速度限制",
-      '<p>限制<b>平均速度</b>（只能限制平均速度，无法限制峰值速度!）</p>' +
-      '<input class="m-input" id="inLimit" placeholder="留空则不限制" value="' + (cur > 0 ? window.formatBytes(cur, 0) : "") + '">' +
-      '<p class="muted">例：10MB/s</p>',
+      '<p>限制<b>平均速度</b>（限不了峰值）。</p>' +
+      '<div class="unit-row"><input class="m-input" id="inLimit" inputmode="decimal" placeholder="留空则不限制" value="' + num + '">' +
+      '<select class="m-select" id="unitLimit"><option value="1048576"' + (isGB ? "" : " selected") + '>MB/s</option><option value="1073741824"' + (isGB ? " selected" : "") + '>GB/s</option></select></div>',
       [
         { text: "取消", cls: "plain", fn: closeModal },
         {
           text: "确定", fn: () => {
-            const v = parseBytesInput($("inLimit").value || "");
-            if (isNaN(v)) { toast("格式不正确"); return; }
+            const raw = $("inLimit").value.trim();
+            if (!raw) {
+              Store.set(Store.K.speedLimit, 0); engine.speedLimit = 0;
+              closeModal(); toast("已取消限速"); return;
+            }
+            const n = parseFloat(raw);
+            if (!(n > 0) || isNaN(n)) { toast("请输入正数"); return; }
+            const v = Math.round(n * parseInt($("unitLimit").value, 10));
             Store.set(Store.K.speedLimit, v);
             engine.speedLimit = v;
             closeModal();
-            toast(v > 0 ? "平均速度限速已设置" : "已取消限速");
+            toast("平均速度限速已设置：" + window.formatBytes(v, 0) + "/s");
           }
         }
       ]);
@@ -441,14 +464,10 @@
       ? "<p class='muted'>当前版本：" + escapeHTML(String(info.version)) + "（构建 " + escapeHTML(String(info.build)) + "）</p>"
       : "";
     openModal("使用说明",
-      "<p><b>关于本页</b></p>" +
-      "<p>1、本应用为「流量消耗器」（原「网络速度」）安卓端：多线程循环下载真实公开文件消耗流量并测速，实时显示总使用量、速度与带宽峰值；</p>" +
-      "<p>2、<b>后台测速</b>：打开「保持后台运行」后切换到桌面/锁屏，测速会在前台服务中继续（通知栏有常驻提醒，CPU 保持唤醒）；切到后台/息屏后，下载会<b>交棒给前台服务的原生线程</b>（WebView 的 JS 在息屏时会被系统冻结）。部分国产 ROM（如小米 HyperOS）还需在系统设置中允许本应用「后台运行/自启动」、把省电策略设为「无限制」并锁定后台，否则系统会冻结整个进程；</p>" +
-      "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
-      "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
-      "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
-      "<p>6、<b>总使用量</b>每次进入页面自动清零（带宽峰值同），会话内累计，点一下该数字也可手动清零；节点、线程数、自定义地址等设置保留。<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
-      "<p>7、<b>咪咕视频节点与定向流量</b>：解析与下载完整复刻官方 App 的调度链（GSLB 302 派发，分片可能走 http:8080，仍限 miguvideo.com 官方域）。流量能否计入定向流量由运营商识别，需同时满足：手机用蜂窝数据（Wi-Fi 下载不产生蜂窝流量）、<b>关闭 VPN/代理</b>（开启后运营商会把全部流量转成通用流量）、套餐确实包含咪咕视频定向（部分套餐排除短视频/竖屏等特定内容）。定向流量统计常有延迟，请以运营商 App 或账单为准；实际落点见下方诊断行。</p>" +
+      "<p>多线程循环下载真实文件，主动消耗流量并测速。<b>总使用量</b>进入页面自动清零（点数字可手动清零）；<b>用量上限</b>只对本次测试生效。</p>" +
+      "<p><b>后台测速</b>：开「后台运行」后切后台/息屏，下载交棒原生线程继续；部分 ROM 需在系统设置允许本应用后台运行并忽略电池优化。</p>" +
+      "<p><b>咪咕视频节点</b>走官方调度链；是否计入定向流量以运营商账单为准（需蜂窝网络 + 关闭 VPN，统计有延迟）。</p>" +
+      "<p>自定义地址仅支持 https；测试地址来自公开资源，可能失效。</p>" +
       (await diagLine()) +
       verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
@@ -566,7 +585,7 @@
   Store.set(Store.K.maxSpeed, "0");
   $("mUsed").textContent = window.formatBytes(0, 1);
   $("mBand").textContent = "0 Mbps";
-  $("bandBar").style.width = "0%";
+  $("bandBar").style.setProperty("--w", "0%");
   function resetTotalUse() {
     engine.totalBytes = 0;
     engine.sessionBytes = 0;   // 累计清零时本次也归零，避免平均速度被历史用量污染
