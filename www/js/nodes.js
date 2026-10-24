@@ -7,9 +7,9 @@ window.NODE_GROUPS = [
   {
     label: "270专项",
     options: [
-      { label: "咕咪快游1", value: "https://gcache.migu.cn/depository_cmamgame01_dob01/channel_for_homepage_game2/202608/0513/49/B1589500/media/1111301_m3u8_ts/00000.ts" },
-      { label: "咪咕视频1", value: window.MIGU_VIDEO_SOURCE },
-      { label: "咪咕音乐1", value: window.MIGU_MUSIC_SOURCE }
+      { label: "咕咪快游（50g）", value: "https://gcache.migu.cn/depository_cmamgame01_dob01/channel_for_homepage_game2/202608/0513/49/B1589500/media/1111301_m3u8_ts/00000.ts" },
+      { label: "咕咪视频（50g）", value: window.MIGU_VIDEO_SOURCE },
+      { label: "咕咪音乐（30g）", value: window.MIGU_MUSIC_SOURCE }
     ]
   },
   {
