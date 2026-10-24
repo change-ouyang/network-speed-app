@@ -135,17 +135,16 @@
     engine.setThreads(n);
   });
 
-  // ---------- 主题切换（铭牌栏对比度图标：跟随系统 → 暗色 → 亮色 循环） ----------
-  const THEMES = ["auto", "dark", "light"];
-  const THEME_NAMES = { auto: "跟随系统", dark: "暗色", light: "亮色" };
+  // ---------- 主题切换（铭牌栏对比度图标：亮色 ↔ 暗色，默认亮色） ----------
+  const THEME_NAMES = { light: "亮色", dark: "暗色" };
+  function currentTheme() { return Store.get(Store.K.theme, "light") === "dark" ? "dark" : "light"; }
   function applyTheme(t) {
-    document.documentElement.dataset.theme = (t === "dark" || t === "light") ? t : "";
-    document.documentElement.style.colorScheme = t === "auto" ? "light dark" : t;
+    document.documentElement.dataset.theme = t;
+    document.documentElement.style.colorScheme = t;
   }
-  applyTheme(Store.get(Store.K.theme, "auto") || "auto");
+  applyTheme(currentTheme());
   $("btnTheme").addEventListener("click", () => {
-    const cur = Store.get(Store.K.theme, "auto") || "auto";
-    const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+    const next = currentTheme() === "light" ? "dark" : "light";
     Store.set(Store.K.theme, next);
     applyTheme(next);
     toast("主题：" + THEME_NAMES[next]);
