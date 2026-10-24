@@ -69,7 +69,8 @@ public final class MiguSourceResolver {
 
     // 前台桥与后台所有线程共用缓存，同时到达时只向官网解析一次。
     // 两级策略：先按官方链路原样走（http 也照发，让 GSLB 302 把我们派到运营商免流池）；
-    // 失败（如网络禁明文 8080）再回退到全 https 链路保底。两条链都失败才进入退避。
+    // 传输类失败（网络禁明文 8080、超时等）再回退到全 https 链路保底。
+    // 内容策略类错误（DRM/节目不匹配等）换 https 也不会变，不浪费回退请求。
     synchronized String mediaUrl() throws Exception {
         checkInterrupted();
         long now = clock.now();
@@ -77,6 +78,11 @@ public final class MiguSourceResolver {
         if (now < retryAt) throw new IOException(lastError);
         try {
             return resolveChain(now, false);
+        } catch (ContentException e) {
+            cachedUrl = null;
+            lastError = e.getMessage();
+            retryAt = clock.now() + RETRY_MS;
+            throw new IOException(lastError, e);
         } catch (Exception first) {
             checkInterrupted();
             try {
@@ -90,6 +96,11 @@ public final class MiguSourceResolver {
         }
     }
 
+    /** 内容策略类失败：换传输方式（http/https）结果相同，不值得重试另一条链。 */
+    private static final class ContentException extends IOException {
+        ContentException(String message) { super(message); }
+    }
+
     private String resolveChain(long now, boolean forceHttps) throws Exception {
         TextResponse api = transport.get(playUrlRequest(now), true, forceHttps);
         JSONObject response = new JSONObject(api.text);
@@ -97,14 +108,14 @@ public final class MiguSourceResolver {
         JSONObject info = object(body, "urlInfo");
         JSONObject content = object(body, "content");
         if (!"SUCCESS".equals(response.optString("rid")) || info == null || content == null) {
-            throw new IOException("咪咕暂未提供该免费视频，请稍后重试");
+            throw new ContentException("咪咕暂未提供该免费视频，请稍后重试");
         }
         if (Boolean.TRUE.equals(content.opt("drm")) || Boolean.TRUE.equals(content.opt("isDrmContent"))
                 || positive(info.optString("trySeeDuration"))) {
-            throw new IOException("咪咕返回了受限内容，已停止解析");
+            throw new ContentException("咪咕返回了受限内容，已停止解析");
         }
         String contentId = content.optString("contId");
-        if (!CONTENT_ID.equals(contentId)) throw new IOException("咪咕返回的节目不匹配");
+        if (!CONTENT_ID.equals(contentId)) throw new ContentException("咪咕返回的节目不匹配");
         String signed = signMediaUrl(info.getString("url"), contentId, now);
         TextResponse playlist = transport.get(official(signed, forceHttps), false, forceHttps);
         // 最多两层主清单；分片相对路径必须以重定向后的最终 URL 为基准。
@@ -155,7 +166,7 @@ public final class MiguSourceResolver {
             if (part.startsWith("puData=")) puData = part.substring(7);
         }
         if (puData == null || !puData.matches("[a-fA-F0-9]{32}") || !contentId.matches("[0-9]{9,}")) {
-            throw new IOException("咪咕播放参数已变化");
+            throw new ContentException("咪咕播放参数已变化");
         }
         SimpleDateFormat date = new SimpleDateFormat("yyyyMMdd", Locale.ROOT);
         date.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
@@ -182,7 +193,7 @@ public final class MiguSourceResolver {
         String host = url.getHost().toLowerCase(Locale.ROOT);
         if (!(host.equals("miguvideo.com") || host.endsWith(".miguvideo.com"))
                 || !(url.getProtocol().equals("http") || url.getProtocol().equals("https"))
-                || url.getUserInfo() != null) throw new IOException("咪咕返回了非官方资源地址");
+                || url.getUserInfo() != null) throw new ContentException("咪咕返回了非官方资源地址");
         if (forceHttps && url.getProtocol().equals("http")) {
             return "https://" + host + url.getFile();
         }

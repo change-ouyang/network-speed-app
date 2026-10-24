@@ -22,9 +22,11 @@ public class MiguSourceResolverTest {
         String segment = "part.ts?encrypt=a%2Bb&timestamp=1";
         boolean offline;
         public long now() { return time; }
-        public MiguSourceResolver.TextResponse get(String url, boolean api) throws Exception {
+        public MiguSourceResolver.TextResponse get(String url, boolean api, boolean forceHttps) throws Exception {
             calls++;
-            assertTrue(url.startsWith("https://"));
+            // 官方链路（forceHttps=false）保持 GSLB 给的 http；保底链路全 https；play API 恒为 https
+            if (api || forceHttps) assertTrue(url.startsWith("https://"));
+            else assertTrue(url.startsWith("http://"));
             if (offline) throw new IOException("网络不可达");
             return api ? new MiguSourceResolver.TextResponse(url, response)
                     : new MiguSourceResolver.TextResponse(HOST + "a.m3u8?ticket=x", vod(segment));
@@ -37,29 +39,35 @@ public class MiguSourceResolverTest {
 
     @Test public void relativeSegmentsUseFinalCdnAndKeepSignature() throws Exception {
         assertEquals(HOST + "part.ts?encrypt=a%2Bb&timestamp=1", MiguSourceResolver.firstResource(
-                new MiguSourceResolver.TextResponse(HOST + "a.m3u8?ticket=x", vod("part.ts?encrypt=a%2Bb&timestamp=1"))));
+                new MiguSourceResolver.TextResponse(HOST + "a.m3u8?ticket=x", vod("part.ts?encrypt=a%2Bb&timestamp=1")), false));
     }
 
-    @Test public void upgradesOfficialHttpPortWithoutChangingRawQuery() throws Exception {
-        assertEquals(HOST + "part.ts?token=a%2Bb", MiguSourceResolver.httpsOfficial(
-                "http://hlszymgspvod.miguvideo.com:8080/asset/part.ts?token=a%2Bb"));
+    @Test public void officialChainKeepsGslbSchemeAndPort() throws Exception {
+        // 官方调度链：保留 GSLB 给的 http 与端口，让 302 派发生效（免流池识别的关键）
+        assertEquals("http://hlszymgspvod.miguvideo.com:8080/asset/part.ts?token=a%2Bb", MiguSourceResolver.official(
+                "http://hlszymgspvod.miguvideo.com:8080/asset/part.ts?token=a%2Bb", false));
+    }
+
+    @Test public void fallbackUpgradesHttpWithoutChangingRawQuery() throws Exception {
+        assertEquals(HOST + "part.ts?token=a%2Bb", MiguSourceResolver.official(
+                "http://hlszymgspvod.miguvideo.com:8080/asset/part.ts?token=a%2Bb", true));
     }
 
     @Test public void rejectsLookalikeDomainsAndUserInfo() {
         for (String url : new String[]{"https://miguvideo.com.evil.example/a.ts", "https://example.com/a.ts", "https://u@hlszymgspvod.miguvideo.com/a.ts"}) {
-            assertThrows(Exception.class, () -> MiguSourceResolver.httpsOfficial(url));
+            assertThrows(Exception.class, () -> MiguSourceResolver.official(url, false));
         }
     }
 
     @Test public void rejectsHtmlEncryptedLiveAndEmptyPlaylists() {
         for (String content : new String[]{"<html>error</html>", "#EXTM3U\n", "#EXTM3U\n#EXTINF:8,\na.ts", vod("a.ts") + "#EXT-X-KEY:METHOD=AES-128,URI=\"k\""}) {
-            assertThrows(IOException.class, () -> MiguSourceResolver.firstResource(new MiguSourceResolver.TextResponse(HOST + "a.m3u8", content)));
+            assertThrows(IOException.class, () -> MiguSourceResolver.firstResource(new MiguSourceResolver.TextResponse(HOST + "a.m3u8", content), false));
         }
     }
 
     @Test public void handlesMasterPlaylist() throws Exception {
         assertEquals(HOST + "low/index.m3u8", MiguSourceResolver.firstResource(new MiguSourceResolver.TextResponse(
-                HOST + "master.m3u8", "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nlow/index.m3u8\n")));
+                HOST + "master.m3u8", "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nlow/index.m3u8\n"), false));
     }
 
     @Test public void signsAnonymousAddressWithoutReencoding() throws Exception {
@@ -102,9 +110,23 @@ public class MiguSourceResolverTest {
         f.offline = true;
         MiguSourceResolver resolver = new MiguSourceResolver(f, f);
         for (int i = 0; i < 32; i++) assertThrows(IOException.class, resolver::mediaUrl);
-        assertEquals(1, f.calls);
+        // 传输类失败：官方 http 链 + https 保底链各尝试一次后进入退避
+        assertEquals(2, f.calls);
         f.offline = false;
         f.time += 5001;
+        assertEquals(HOST + f.segment, resolver.mediaUrl());
+        assertEquals(4, f.calls);
+    }
+
+    @Test public void fallsBackToHttpsWhenOfficialChainTransportFails() throws Exception {
+        // 官方 http 链路传输失败（如网络禁明文 8080）→ 自动走 https 保底链并成功
+        Fixture f = new Fixture() {
+            @Override public MiguSourceResolver.TextResponse get(String url, boolean api, boolean forceHttps) throws Exception {
+                if (!api && !forceHttps) throw new IOException("明文被策略拦截");
+                return super.get(url, api, forceHttps);
+            }
+        };
+        MiguSourceResolver resolver = new MiguSourceResolver(f, f);
         assertEquals(HOST + f.segment, resolver.mediaUrl());
         assertEquals(3, f.calls);
     }
@@ -114,6 +136,7 @@ public class MiguSourceResolverTest {
             Fixture f = new Fixture();
             f.response = response;
             assertThrows(IOException.class, new MiguSourceResolver(f, f)::mediaUrl);
+            // 内容策略类错误：换传输方式结果相同，不浪费 https 回退请求
             assertEquals(1, f.calls);
         }
     }
