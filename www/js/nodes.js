@@ -28,16 +28,16 @@ window.NODE_GROUPS = [
   }
 ];
 
-// 定向活动（整理自 270666.xyz「活动/权益」区，2026-10-24 抓取）：
-// 都是领取/抽奖类 H5，需在系统浏览器打开（部分要登录中国移动账号或跳转对应 APP）。
+// 定向活动（整理自 270666.xyz「活动/权益」区，2026-10-24 抓取）。
+// 原站按省份放行完整名单（服务器端下发），此处只收录可直链的项目；
+// url 为空的条目在弹窗里纯展示（领取入口在对应 APP 内）。
 window.MIGU_ACTIVITIES = [
-  { label: "流量翻倍乐", note: "", url: "https://hb.ac.10086.cn/hyh_release/h5/static/act/flowdouble" },
   { label: "5G-A 体验4小时提速包", note: "网龄成长计划", url: "https://dev.coc.10086.cn/coc/web6/ageFeedbackV2/?pageId=1879720710683729920" },
-  { label: "心级调研转盘抽奖", note: "调研评分抽奖得【流量/语音】", url: "https://dx.10086.cn/JcaSBg" },
-  { label: "云盘见面礼-签到", note: "每日签到【2G 日包 通用】", url: "https://caiyun.feixin.10086.cn" },
-  { label: "移动云盘福利领不停", note: "", url: "https://wx.10086.cn/website/businessPlatform/shop?pageid=f923bb40b4ef499da20a44a21b720531" },
-  { label: "咪咕视频定向流量", note: "活动页直达", url: "https://m.miguvideo.com/m/provincevml/c3b5b1441d37402699644fbd83e04684" },
-  { label: "咪咕音乐流量月包", note: "月包，需跳转至咪咕音乐APP领取", url: "https://y.migu.cn/app/rbt/act/zt/2025/flow-month/index.html" }
+  { label: "咕咪快游（50G）", note: "咪咕快游 APP 内领取", url: "" },
+  { label: "咕咪视频（50G）", note: "活动页直达", url: "https://m.miguvideo.com/m/provincevml/c3b5b1441d37402699644fbd83e04684" },
+  { label: "咕咪音乐（30G）", note: "月包，需跳转至咪咕音乐APP领取", url: "https://y.migu.cn/app/rbt/act/zt/2025/flow-month/index.html" },
+  { label: "移动云盘（30G）", note: "云盘签到/领取入口", url: "https://caiyun.feixin.10086.cn" },
+  { label: "中移网大（20G）", note: "领取链接见中国移动APP", url: "" }
 ];
 
 // 保留海外组数据，随时可重新启用（App 原生网络无跨域限制）
