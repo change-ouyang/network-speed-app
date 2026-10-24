@@ -447,7 +447,7 @@
       "<p>3、请勿用于非法用途，使用本工具造成的一切后果由用户承担；</p>" +
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
       "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
-      "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
+      "<p>6、<b>总使用量</b>每次进入页面自动清零（带宽峰值同），会话内累计，点一下该数字也可手动清零；节点、线程数、自定义地址等设置保留。<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
       "<p>7、<b>咪咕视频节点与定向流量</b>：解析与下载完整复刻官方 App 的调度链（GSLB 302 派发，分片可能走 http:8080，仍限 miguvideo.com 官方域）。流量能否计入定向流量由运营商识别，需同时满足：手机用蜂窝数据（Wi-Fi 下载不产生蜂窝流量）、<b>关闭 VPN/代理</b>（开启后运营商会把全部流量转成通用流量）、套餐确实包含咪咕视频定向（部分套餐排除短视频/竖屏等特定内容）。定向流量统计常有延迟，请以运营商 App 或账单为准；实际落点见下方诊断行。</p>" +
       (await diagLine()) +
       verLine,
@@ -559,9 +559,14 @@
   engine.maxUse = Store.getMaxUse();
   engine.speedLimit = Store.getSpeedLimit();
 
-  // 恢复累计总使用量（跨启动保留：页面被系统回收重载后不再「被重置」），并支持点击清零
-  engine.totalBytes = Store.getTotalUse();
-  $("mUsed").textContent = window.formatBytes(engine.totalBytes, 1);
+  // 每次进入页面：数据还原初始（总使用量、带宽峰值清零），设置项（节点/线程/开关/自定义地址）保留。
+  // 页面被系统回收重载时同样清零：原生后台泵的字节仍会经 absorbPumpBytes 并入，不丢账。
+  engine.totalBytes = 0;
+  Store.setTotalUse(0);
+  Store.set(Store.K.maxSpeed, "0");
+  $("mUsed").textContent = window.formatBytes(0, 1);
+  $("mBand").textContent = "0 Mbps";
+  $("bandBar").style.width = "0%";
   function resetTotalUse() {
     engine.totalBytes = 0;
     engine.sessionBytes = 0;   // 累计清零时本次也归零，避免平均速度被历史用量污染
@@ -578,13 +583,6 @@
     e.preventDefault();
     resetTotalUse();
   });
-  const savedPeak = Store.getMaxSpeed();
-  if (savedPeak > 0) {
-    engine.peakSpeed = savedPeak;
-    const mbps = savedPeak * 8 / 1e6;
-    $("mBand").textContent = (mbps >= 100 ? Math.round(mbps) : mbps.toFixed(1)) + " Mbps";
-    $("bandBar").style.width = Math.min(100, mbps / 500 * 100).toFixed(1) + "%";
-  }
   loadGeo(false);
   if (!Store.get(Store.K.acknowledged, "")) showNotice();
   refreshPlayUI();
