@@ -256,7 +256,7 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 42×22px 方形滑槽（Socket 空腔 + 内凹阴影）+ 16px 方形滑块（3px 圆角、顶缘高光）；拨上 `translateX(20px)`，选中时槽与滑块描边转 LED 绿。两只：后台运行 / 自动运行。
 
 ### 单位下拉（Unit Select）
-数字 + 单位成对输入件（`.unit-row`）：m-input 占 flex:1 且行内 `margin-top:0`（吃掉 m-input 自带的 6px 顶距，与下拉严格同高同行），`.m-select`（88px、Code 声部、inset 底 + 内凹阴影、`align-self:stretch`）钉在右侧。用量上限（MB/GB）与限速（MB/s、GB/s）共用；存储恒为字节，重开弹框时按 ≥1GB 自动回选 GB 并回填纯数字。
+数字 + 单位成对输入件（`.unit-row`）：m-input 占 flex:1 且行内 `margin-top:0`（吃掉 m-input 自带的 6px 顶距），`.unit-dd`（96px）钉在右侧，触发钮 stretch 到输入框同高。单位面板是自定义浮层（fixed 挂 body、与触发钮右对齐），不用原生 `<select>`——系统弹层的定位/样式不可控，且 `.modal-body` 的 overflow 会裁剪内嵌浮层。用量上限（MB/GB）与限速（MB/s、GB/s）共用；存储恒为字节，重开弹框时按 ≥1GB 自动回选 GB 并回填纯数字。
 
 ### 选择器（Select）
 触发区是凹面输入（inset 底 + 强线框 + 9px 圆角 + 内凹阴影），左链路图标（Accent 绿）、右展开箭头（`.open` 旋转 180°）。下拉面板 = 凸面板浮层（z 30），分组标题用 Code 声部（.78rem），选中项 Accent 绿加粗。键盘：Enter/Space 展开与选中；`focus-visible` 用 Accent 内描边（-2px）。

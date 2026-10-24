@@ -251,7 +251,70 @@
     }
   });
 
+  // ---------- 弹窗：单位下拉 ----------
+  // 自定义面板而非原生 <select>：系统弹层的定位与样式不可控（用户实测错位），
+  // 且 .modal-body 是 overflow:auto 会裁剪内嵌浮层，故面板挂 body、fixed 定位右对齐触发钮
+  const unitDD = {
+    val: {},   // id -> 单位字节数
+    html(id, units, idx) {
+      this.val[id] = units[idx][1];
+      return '<div class="unit-dd" id="' + id + '">' +
+        '<button type="button" class="unit-dd-btn" aria-haspopup="listbox" aria-expanded="false">' +
+        '<span class="unit-dd-val">' + units[idx][0] + '</span>' +
+        '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg>' +
+        '</button></div>';
+    },
+    bind(id, units) {
+      const btn = $(id).querySelector(".unit-dd-btn");
+      const label = $(id).querySelector(".unit-dd-val");
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if ($(id).__open) { closeUnitPanel(); return; }
+        closeUnitPanel();
+        const panel = document.createElement("div");
+        panel.className = "unit-dd-panel";
+        panel.__owner = id;
+        $(id).__open = true;
+        units.forEach(u => {
+          const it = document.createElement("button");
+          it.type = "button";
+          it.className = "unit-dd-item" + (this.val[id] === u[1] ? " active" : "");
+          it.textContent = u[0];
+          it.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            this.val[id] = u[1];
+            label.textContent = u[0];
+            closeUnitPanel();
+          });
+          panel.appendChild(it);
+        });
+        document.body.appendChild(panel);
+        panel.classList.add("show");   // 先显示再量宽：display:none 时 offsetWidth 为 0，定位会整列偏移
+        const r = btn.getBoundingClientRect();
+        // 与触发钮右对齐；贴近视口左缘时收回（左对齐兜底）
+        panel.style.left = Math.max(8, Math.min(r.right - panel.offsetWidth, window.innerWidth - panel.offsetWidth - 8)) + "px";
+        panel.style.top = (r.bottom + 5) + "px";
+        btn.setAttribute("aria-expanded", "true");
+      });
+    }
+  };
+  function closeUnitPanel() {
+    document.querySelectorAll(".unit-dd-panel").forEach(p => {
+      const box = document.getElementById(p.__owner);
+      if (box) {
+        box.__open = false;
+        const b = box.querySelector(".unit-dd-btn");
+        if (b) b.setAttribute("aria-expanded", "false");
+      }
+      p.remove();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".unit-dd-panel") && !e.target.closest(".unit-dd-btn")) closeUnitPanel();
+  });
+
   // ---------- 弹窗：用量上限 ----------
+  const USE_UNITS = [["MB", 1048576], ["GB", 1073741824]];
   $("btnMaxUse").addEventListener("click", () => {
     const cur = Store.getMaxUse();
     const isGB = cur >= 1073741824;
@@ -259,7 +322,7 @@
     openModal("用量上限",
       '<p>本次测试用量达到上限后自动停止。</p>' +
       '<div class="unit-row"><input class="m-input" id="inMaxUse" inputmode="decimal" placeholder="留空则无上限" value="' + num + '">' +
-      '<select class="m-select" id="unitMaxUse"><option value="1048576"' + (isGB ? "" : " selected") + '>MB</option><option value="1073741824"' + (isGB ? " selected" : "") + '>GB</option></select></div>',
+      unitDD.html("ddMaxUse", USE_UNITS, isGB ? 1 : 0) + '</div>',
       [
         { text: "取消", cls: "plain", fn: closeModal },
         {
@@ -271,7 +334,7 @@
             }
             const n = parseFloat(raw);
             if (!(n > 0) || isNaN(n)) { toast("请输入正数"); return; }
-            const v = Math.round(n * parseInt($("unitMaxUse").value, 10));
+            const v = Math.round(n * unitDD.val.ddMaxUse);
             Store.set(Store.K.maxUse, v);
             engine.maxUse = v;
             closeModal();
@@ -279,9 +342,11 @@
           }
         }
       ]);
+    unitDD.bind("ddMaxUse", USE_UNITS);
   });
 
   // ---------- 弹窗：限速 ----------
+  const LIMIT_UNITS = [["MB/s", 1048576], ["GB/s", 1073741824]];
   $("btnLimit").addEventListener("click", () => {
     const cur = Store.getSpeedLimit();
     const isGB = cur >= 1073741824;
@@ -289,7 +354,7 @@
     openModal("速度限制",
       '<p>限制<b>平均速度</b>（限不了峰值）。</p>' +
       '<div class="unit-row"><input class="m-input" id="inLimit" inputmode="decimal" placeholder="留空则不限制" value="' + num + '">' +
-      '<select class="m-select" id="unitLimit"><option value="1048576"' + (isGB ? "" : " selected") + '>MB/s</option><option value="1073741824"' + (isGB ? " selected" : "") + '>GB/s</option></select></div>',
+      unitDD.html("ddLimit", LIMIT_UNITS, isGB ? 1 : 0) + '</div>',
       [
         { text: "取消", cls: "plain", fn: closeModal },
         {
@@ -301,7 +366,7 @@
             }
             const n = parseFloat(raw);
             if (!(n > 0) || isNaN(n)) { toast("请输入正数"); return; }
-            const v = Math.round(n * parseInt($("unitLimit").value, 10));
+            const v = Math.round(n * unitDD.val.ddLimit);
             Store.set(Store.K.speedLimit, v);
             engine.speedLimit = v;
             closeModal();
@@ -309,6 +374,7 @@
           }
         }
       ]);
+    unitDD.bind("ddLimit", LIMIT_UNITS);
   });
 
   // ---------- 弹窗：用量预测 ----------
