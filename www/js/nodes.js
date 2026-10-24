@@ -28,17 +28,17 @@ window.NODE_GROUPS = [
   }
 ];
 
-// 定向活动（清单来自 270666.xyz「活动/权益」区 + 用户补充，2026-10-24）：
-// 5G-A 提速包 + 七个定向包；url 为空的条目在弹窗里纯展示（领取入口在对应 APP 内）。
+// 定向活动：与 270666.xyz「270交流群专版」（?s=270）活动弹层逐条对齐，
+// 链接经真机 CDP 逐个点击「参与」钮钩取（2026-10-24），顺序同原站。
 window.MIGU_ACTIVITIES = [
-  { label: "5G-A 体验4小时提速包", url: "https://dev.coc.10086.cn/coc/web6/ageFeedbackV2/?pageId=1879720710683729920" },
-  { label: "咕咪快游（50G）", url: "" },
-  { label: "咕咪视频（50G）", url: "https://m.miguvideo.com/m/provincevml/c3b5b1441d37402699644fbd83e04684" },
-  { label: "咕咪音乐（30G）", url: "https://y.migu.cn/app/rbt/act/zt/2025/flow-month/index.html" },
-  { label: "咕咪悦看（30G）", url: "https://n.cmread.com/nap/p/mlln30Ghl.jsp" },
-  { label: "移动云盘（30G）", url: "https://caiyun.feixin.10086.cn" },
-  { label: "云手机（30G）", url: "https://cpability.buy.139.com/freetraffic/#/apporder" },
-  { label: "中移网大（20G）", url: "" }
+  { label: "5G-A 体验4小时提速包", url: "https://wap.hb.10086.cn/wapres/wap-h5/dobusiness/0Y5GATY4HTSB.html" },
+  { label: "咪咕视频定向流量【50G】", url: "https://s.miguvideo.com/NjAb2eM" },
+  { label: "咪咕音乐定向流量【30G】", url: "https://h5.nf.migu.cn/app/v4/zt/2021/directed-flow/index.html" },
+  { label: "咪咕悦看定向流量【30G】", url: "https://n.cmread.com/nap/p/mlln30Ghl.jsp" },
+  { label: "云手机定向流量【30G】", url: "https://cpability.buy.139.com/freetraffic/#/apporder" },
+  { label: "咪咕快游定向流量【50G】", url: "https://www.migufun.com/miguplay/html/personalTraffic/personalTrafficUp50" },
+  { label: "移动云盘定向流量【30G】", url: "https://caiyun.feixin.10086.cn:7071/portal/caiyunOfficialAccount/index.html?path=zeroPurchase" },
+  { label: "中移网大定向流量【20G】", url: "https://dev.coc.10086.cn/coc/canvas/package-h5-canvas/online/zhongyiwangda?pageId=1696418506034348032&channelId=P00000132701" }
 ];
 
 // 保留海外组数据，随时可重新启用（App 原生网络无跨域限制）
