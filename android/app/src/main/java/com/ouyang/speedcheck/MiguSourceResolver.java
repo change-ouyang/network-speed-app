@@ -48,14 +48,19 @@ public final class MiguSourceResolver {
         this.clock = clock;
     }
 
-    public static boolean matches(String url) { return SOURCE_URL.equals(url); }
+    public static boolean matches(String url) { return SOURCE_URL.equals(url) || MiguMusicResolver.matches(url); }
 
     public static String resolve(String source) throws Exception {
+        if (MiguMusicResolver.matches(source)) return MiguMusicResolver.sharedMediaUrl();
         return matches(source) ? SHARED.mediaUrl() : source;
     }
 
     public static void rejected(String source, String mediaUrl) {
-        if (matches(source)) SHARED.invalidate(mediaUrl);
+        if (MiguMusicResolver.matches(source)) {
+            MiguMusicResolver.sharedRejected(mediaUrl);
+        } else if (matches(source)) {
+            SHARED.invalidate(mediaUrl);
+        }
     }
 
     // 只作废实际被拒绝的那一代地址；旧线程迟到的 403 不能清掉新地址。
@@ -270,5 +275,188 @@ public final class MiguSourceResolver {
             }
             throw new IOException("咪咕调度跳转次数过多");
         }
+    }
+}
+
+/**
+ * 咪咕音乐动态节点：H5 播放策略接口（listen-url/h5/v2.4，免签名）按次签发短时效音频直链，
+ * 实测约 5 分钟后失效。下载循环里 404 经 {@link MiguSourceResolver#rejected} 作废缓存、
+ * 下一轮自动重签，与视频节点同一套生命周期。响应体为私有混淆格式：AB CD 01 盐值 + 密钥
+ * 逐字节回滚（密钥取自咪咕 H5 前端），无账号、无设备指纹参与。
+ */
+final class MiguMusicResolver {
+    static final String SOURCE_URL = "https://music.migu.cn/v3/web/song/600908000003562466";
+    private static final String CONTENT_ID = "600908000003562466";
+    private static final String COPYRIGHT_ID = "60054704037";
+    private static final String LISTEN_API = "https://c.musicapp.migu.cn/strategy/listen-url/h5/v2.4";
+    private static final String CIPHER_KEY = "Jk8qzuePiJ1qE3mDYhLQ3T73DtDoAhLP";
+    private static final String REFERER = "https://y.migu.cn/";
+    private static final long CACHE_MS = 3 * 60 * 1000L;
+    private static final long RETRY_MS = 5000L;
+    private static final MiguMusicResolver SHARED = new MiguMusicResolver(
+            new HttpsTransport(), System::currentTimeMillis);
+
+    interface Clock { long now(); }
+    interface Transport { byte[] get(String url) throws Exception; }
+
+    /** 内容策略类失败（接口拒签/返回非官方音频）：重试也不会变，直接停节点并给出原因。 */
+    private static final class ContentException extends IOException {
+        ContentException(String message) { super(message); }
+    }
+
+    private final Transport transport;
+    private final Clock clock;
+    private String cachedUrl;
+    private long expiresAt;
+    private long retryAt;
+    private String lastError;
+
+    MiguMusicResolver(Transport transport, Clock clock) {
+        this.transport = transport;
+        this.clock = clock;
+    }
+
+    static boolean matches(String url) { return SOURCE_URL.equals(url); }
+
+    static String sharedMediaUrl() throws Exception { return SHARED.mediaUrl(); }
+
+    static void sharedRejected(String mediaUrl) { SHARED.invalidate(mediaUrl); }
+
+    synchronized void invalidate(String mediaUrl) {
+        if (mediaUrl != null && mediaUrl.equals(cachedUrl)) {
+            cachedUrl = null;
+            expiresAt = 0;
+            lastError = "咪咕音乐地址已失效，正在重新获取";
+        }
+    }
+
+    synchronized String mediaUrl() throws Exception {
+        checkInterrupted();
+        long now = clock.now();
+        if (cachedUrl != null && now < expiresAt) return cachedUrl;
+        if (now < retryAt) throw new IOException(lastError);
+        try {
+            String media = resolveChain();
+            cachedUrl = media;
+            expiresAt = clock.now() + CACHE_MS;
+            retryAt = clock.now() + RETRY_MS;
+            lastError = null;
+            return cachedUrl;
+        } catch (ContentException e) {
+            cachedUrl = null;
+            lastError = e.getMessage();
+            retryAt = clock.now() + RETRY_MS;
+            throw new IOException(lastError, e);
+        } catch (Exception e) {
+            checkInterrupted();
+            cachedUrl = null;
+            lastError = (e instanceof IOException && e.getMessage() != null)
+                    ? e.getMessage() : "咪咕音乐解析失败，请稍后重试";
+            retryAt = clock.now() + RETRY_MS;
+            throw new IOException(lastError, e);
+        }
+    }
+
+    private String resolveChain() throws Exception {
+        org.json.JSONObject root = new org.json.JSONObject(decrypt(transport.get(playRequest())));
+        if (!"000000".equals(root.optString("code"))) {
+            throw new ContentException("咪咕音乐接口：" + root.optString("info", "返回异常"));
+        }
+        org.json.JSONObject data = root.optJSONObject("data");
+        String url = data == null ? "" : data.optString("url", "");
+        if (url.isEmpty()) throw new ContentException("咪咕未提供该歌曲的免费播放地址");
+        return validateMediaUrl(url);
+    }
+
+    static String playRequest() {
+        return LISTEN_API + "?contentId=" + CONTENT_ID + "&copyrightId=" + COPYRIGHT_ID
+                + "&resourceType=2&netType=01&toneFlag=PQ&scene=&lowerQualityContentId=" + CONTENT_ID;
+    }
+
+    /** 混淆响应 → 明文 JSON：头三字节魔数 AB CD 01，第四字节盐值，正文按密钥逐字节回滚（模 256）。 */
+    static String decrypt(byte[] data) throws IOException {
+        if (data.length < 5 || (data[0] & 255) != 0xAB || (data[1] & 255) != 0xCD || data[2] != 1) {
+            throw new ContentException("咪咕音乐响应格式已变化");
+        }
+        int salt = data[3] & 255;
+        byte[] key = CIPHER_KEY.getBytes(StandardCharsets.UTF_8);
+        byte[] out = new byte[data.length - 4];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = (byte) ((data[4 + i] & 255) + salt - (key[i % key.length] & 255));
+        }
+        return new String(out, StandardCharsets.UTF_8);
+    }
+
+    /** 只放行咪咕官方 https 音频直链（freetyst.nf.migu.cn 等 *.migu.cn）。 */
+    static String validateMediaUrl(String raw) throws Exception {
+        URL url = new URL(raw);
+        String host = url.getHost().toLowerCase(Locale.ROOT);
+        String path = url.getPath().toLowerCase(Locale.ROOT);
+        if (!url.getProtocol().equals("https") || url.getUserInfo() != null
+                || !(host.equals("migu.cn") || host.endsWith(".migu.cn"))
+                || !(path.endsWith(".mp3") || path.endsWith(".flac")
+                    || path.endsWith(".m4a") || path.endsWith(".aac"))) {
+            throw new ContentException("咪咕音乐返回了非官方音频地址");
+        }
+        return raw;
+    }
+
+    private static void checkInterrupted() throws IOException {
+        if (Thread.currentThread().isInterrupted()) throw new IOException("咪咕解析已取消");
+    }
+
+    private static final class HttpsTransport implements Transport {
+        @Override
+        public byte[] get(String raw) throws Exception {
+            String target = validateApiUrl(raw);
+            long deadline = System.nanoTime() + 15_000_000_000L;
+            for (int hop = 0; hop < 3; hop++) {
+                checkInterrupted();
+                if (System.nanoTime() >= deadline) throw new IOException("咪咕音乐解析超时");
+                HttpURLConnection conn = (HttpURLConnection) new URL(target).openConnection();
+                try {
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setRequestProperty("Accept-Encoding", "identity");
+                    // H5 页面上下文（birth/channel/Referer）：接口按 H5 免费试听策略签发整曲直链
+                    conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36");
+                    conn.setRequestProperty("Referer", REFERER);
+                    conn.setRequestProperty("birth", "h5page");
+                    conn.setRequestProperty("channel", "014X031");
+                    int status = conn.getResponseCode();
+                    if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+                        String location = conn.getHeaderField("Location");
+                        if (location == null) throw new IOException("咪咕音乐调度缺少目标地址");
+                        target = validateApiUrl(new URL(new URL(target), location).toString());
+                        continue;
+                    }
+                    if (status != 200) throw new IOException("咪咕音乐接口请求失败（HTTP " + status + "）");
+                    try (InputStream in = conn.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[4096];
+                        int n;
+                        while ((n = in.read(buffer)) != -1) {
+                            checkInterrupted();
+                            if (System.nanoTime() >= deadline) throw new IOException("咪咕音乐解析超时");
+                            if (out.size() + n > 256 * 1024) throw new IOException("咪咕音乐响应大小异常");
+                            out.write(buffer, 0, n);
+                        }
+                        return out.toByteArray();
+                    }
+                } finally { conn.disconnect(); }
+            }
+            throw new IOException("咪咕音乐调度跳转次数过多");
+        }
+    }
+
+    private static String validateApiUrl(String raw) throws Exception {
+        URL url = new URL(raw);
+        String host = url.getHost().toLowerCase(Locale.ROOT);
+        if (!url.getProtocol().equals("https") || url.getUserInfo() != null
+                || !(host.equals("migu.cn") || host.endsWith(".migu.cn"))) {
+            throw new ContentException("咪咕音乐返回了非官方接口地址");
+        }
+        return raw;
     }
 }

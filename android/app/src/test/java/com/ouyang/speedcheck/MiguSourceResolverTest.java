@@ -153,4 +153,106 @@ public class MiguSourceResolverTest {
         String url = "https://example.com/file.mp4";
         assertEquals(url, MiguSourceResolver.resolve(url));
     }
+
+    // ---------- 咪咕音乐动态节点 ----------
+
+    /** 逆运算构造混淆响应：AB CD 01 盐值 + (明文 - 盐值 + 密钥) 逐字节模 256。 */
+    private static byte[] obfuscate(String json) {
+        byte[] plain = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] key = "Jk8qzuePiJ1qE3mDYhLQ3T73DtDoAhLP".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        out.write(0xAB); out.write(0xCD); out.write(1); out.write(0x7C);
+        for (int i = 0; i < plain.length; i++) out.write((plain[i] - 0x7C + key[i % key.length]) & 255);
+        return out.toByteArray();
+    }
+
+    private static final String MUSIC_URL =
+            "https://freetyst.nf.migu.cn/public/product9th/product45/60054704037163944.mp3?Tim=1&Key=2";
+    private static final String MUSIC_JSON =
+            "{\"code\":\"000000\",\"info\":\"成功\",\"data\":{\"url\":\"" + MUSIC_URL + "\"}}";
+
+    private static class MusicFixture implements MiguMusicResolver.Transport, MiguMusicResolver.Clock {
+        long time = 1791771703000L;
+        int calls;
+        String json;          // 显式指定响应；null = 正常签发
+        boolean varyUrl;      // 每次签发不同地址（真实接口每次 URL 均不同）
+        boolean offline;
+        public long now() { return time; }
+        public byte[] get(String url) throws Exception {
+            calls++;
+            assertTrue(url.startsWith("https://c.musicapp.migu.cn/strategy/listen-url/h5/v2.4?"));
+            assertTrue(url.contains("contentId=600908000003562466"));
+            assertTrue(url.contains("copyrightId=60054704037"));
+            if (offline) throw new IOException("网络不可达");
+            if (json != null) return obfuscate(json);
+            String media = MUSIC_URL + (varyUrl ? "&v=" + calls : "");
+            return obfuscate("{\"code\":\"000000\",\"info\":\"成功\",\"data\":{\"url\":\"" + media + "\"}}");
+        }
+    }
+
+    @Test public void musicDecryptRoundTripsObfuscatedPayload() throws Exception {
+        assertEquals(MUSIC_JSON, MiguMusicResolver.decrypt(obfuscate(MUSIC_JSON)));
+        assertThrows(IOException.class, () -> MiguMusicResolver.decrypt(new byte[]{0x1A, 0x2B, 0x3C, 0x00, 0x41}));
+    }
+
+    @Test public void musicResolvesSignedUrlWithShortCache() throws Exception {
+        MusicFixture f = new MusicFixture();
+        MiguMusicResolver resolver = new MiguMusicResolver(f, f);
+        assertEquals(MUSIC_URL, resolver.mediaUrl());
+        assertEquals(MUSIC_URL, resolver.mediaUrl());   // 3 分钟缓存内不重复签发
+        assertEquals(1, f.calls);
+        f.time += 3 * 60 * 1000L + 1;
+        assertEquals(MUSIC_URL, resolver.mediaUrl());
+        assertEquals(2, f.calls);
+    }
+
+    @Test public void musicRejectedUrlRefreshesAndLateRejectionIsIgnored() throws Exception {
+        MusicFixture f = new MusicFixture();
+        f.varyUrl = true;
+        MiguMusicResolver resolver = new MiguMusicResolver(f, f);
+        String old = resolver.mediaUrl();
+        f.time += 5001;
+        resolver.invalidate(old);
+        String fresh = resolver.mediaUrl();   // 重新签发（每次都是新地址）
+        assertNotEquals(old, fresh);
+        resolver.invalidate(old);             // 迟到的旧拒绝不清新地址
+        assertEquals(fresh, resolver.mediaUrl());
+        assertEquals(2, f.calls);
+    }
+
+    @Test public void musicRejectsNonOfficialOrNonAudioUrls() {
+        for (String url : new String[]{
+                "https://evil.example/song.mp3",
+                "http://freetyst.nf.migu.cn/x/song.mp3",
+                "https://freetyst.nf.migu.cn/x/seg.ts",
+                "https://u@freetyst.nf.migu.cn/x/song.mp3"}) {
+            assertThrows(Exception.class, () -> MiguMusicResolver.validateMediaUrl(url));
+        }
+    }
+
+    @Test public void musicContentErrorsThrottleWithoutRetry() throws Exception {
+        MusicFixture f = new MusicFixture();
+        f.json = "{\"code\":\"299996\",\"info\":\"路由请求不支持\",\"data\":null}";
+        MiguMusicResolver resolver = new MiguMusicResolver(f, f);
+        assertThrows(IOException.class, resolver::mediaUrl);
+        assertThrows(IOException.class, resolver::mediaUrl);   // 退避窗口内不再请求
+        assertEquals(1, f.calls);
+        f.time += 5001;
+        f.json = MUSIC_JSON;
+        assertEquals(MUSIC_URL, resolver.mediaUrl());
+        assertEquals(2, f.calls);
+    }
+
+    @Test public void musicEmptyUrlIsContentErrorNotTransport() throws Exception {
+        MusicFixture f = new MusicFixture();
+        f.json = "{\"code\":\"000000\",\"info\":\"成功\",\"data\":{\"url\":\"\"}}";
+        MiguMusicResolver resolver = new MiguMusicResolver(f, f);
+        assertThrows(IOException.class, resolver::mediaUrl);
+        assertEquals(1, f.calls);   // 内容策略类错误不重试传输
+    }
+
+    @Test public void musicSourceIsRecognizedByDispatch() {
+        assertTrue(MiguSourceResolver.matches(MiguMusicResolver.SOURCE_URL));
+        assertFalse(MiguSourceResolver.matches("https://music.migu.cn/v3/web/song/000000000000000000"));
+    }
 }

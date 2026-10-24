@@ -27,12 +27,14 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "SpeedService")
 public class SpeedServicePlugin extends Plugin {
 
-    /** 解析在独立线程执行，不能阻塞 Capacitor 的停止/后台交接消息。 */
+    /** 解析在独立线程执行，不能阻塞 Capacitor 的停止/后台交接消息。source 区分视频/音乐动态节点。 */
     @PluginMethod
     public void resolveMigu(PluginCall call) {
+        final String source = call.getString("source") != null
+                ? call.getString("source") : MiguSourceResolver.SOURCE_URL;
         new Thread(() -> {
             try {
-                String mediaUrl = MiguSourceResolver.resolve(MiguSourceResolver.SOURCE_URL);
+                String mediaUrl = MiguSourceResolver.resolve(source);
                 JSObject result = new JSObject();
                 result.put("url", mediaUrl);
                 // 定向流量按「分片实际落点（IP/SNI）」识别（HTTPS 下运营商看不到 UA/Host）：
@@ -57,8 +59,10 @@ public class SpeedServicePlugin extends Plugin {
 
     @PluginMethod
     public void rejectMigu(PluginCall call) {
+        final String source = call.getString("source") != null
+                ? call.getString("source") : MiguSourceResolver.SOURCE_URL;
         new Thread(() -> {
-            MiguSourceResolver.rejected(MiguSourceResolver.SOURCE_URL, call.getString("url"));
+            MiguSourceResolver.rejected(source, call.getString("url"));
             call.resolve();
         }, "migu-invalidate").start();
     }

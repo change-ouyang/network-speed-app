@@ -134,3 +134,48 @@ test('普通节点不经过咪咕解析', async () => {
   try { assert.equal((await e._request(null)).bytes, 8); }
   finally { e.stop(); }
 });
+
+// ---------- 咪咕音乐动态节点 ----------
+const music = 'https://freetyst.nf.migu.cn/public/product9th/product45/60054704037163944.mp3?Tim=1&Key=2';
+
+test('音乐节点走动态解析后下载，直链为 *.migu.cn 音频', async () => {
+  let downloaded = null;
+  const c = setup({ resolveMigu: async ({ source }) => {
+    assert.equal(source, c.MIGU_MUSIC_SOURCE);
+    return { url: music };
+  } }, async url => {
+    downloaded = url;
+    return { ok: true, status: 200, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(128) };
+  });
+  const e = new c.SpeedEngine();
+  e.running = true;
+  e.url = c.MIGU_MUSIC_SOURCE;
+  try {
+    assert.equal((await e._request(null)).bytes, 128);
+    assert.equal(downloaded, music);
+  } finally { e.stop(); }
+});
+
+test('音乐直链校验：非 migu.cn 域或非音频后缀被拒绝', async () => {
+  for (const url of ['https://evil.example/song.mp3', 'https://freetyst.nf.migu.cn/x/seg.ts', 'http://freetyst.nf.migu.cn/x/song.mp3']) {
+    const c = setup({ resolveMigu: async () => ({ url }) });
+    await assert.rejects(c.SpeedNative.resolveMigu(c.MIGU_MUSIC_SOURCE), /有效的媒体地址/);
+  }
+});
+
+test('视频/音乐节点缓存隔离，切换节点重新桥调解析', async () => {
+  const resolved = [];
+  const c = setup({ resolveMigu: async ({ source }) => {
+    resolved.push(source);
+    return source === c.MIGU_MUSIC_SOURCE
+      ? { url: music, host: 'freetyst.nf.migu.cn' }
+      : { url: media };
+  } });
+  assert.equal(await c.SpeedNative.resolveMigu(c.MIGU_MUSIC_SOURCE), music);
+  // 同一节点 30 秒内走短缓存，不再桥调
+  assert.equal(await c.SpeedNative.resolveMigu(c.MIGU_MUSIC_SOURCE), music);
+  // 切到视频节点：不是同一节点的缓存，必须重新桥调（JS 侧单槽缓存被顶掉；原生侧另有进程级缓存）
+  assert.equal(await c.SpeedNative.resolveMigu(c.MIGU_VIDEO_SOURCE), media);
+  assert.deepEqual(resolved, [c.MIGU_MUSIC_SOURCE, c.MIGU_VIDEO_SOURCE]);
+  assert.equal(c.SpeedNative.miguDiag.host, 'freetyst.nf.migu.cn');
+});

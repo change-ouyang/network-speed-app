@@ -91,7 +91,8 @@
     // 单次请求：返回 {status, bytes, total}；字节经 _addBytes 实时入账，中止时已收部分保留
     async _request(off) {
       const source = this.url;
-      const dynamic = !!window.MIGU_VIDEO_SOURCE && source === window.MIGU_VIDEO_SOURCE;
+      const dynamic = (!!window.MIGU_VIDEO_SOURCE && source === window.MIGU_VIDEO_SOURCE)
+        || (!!window.MIGU_MUSIC_SOURCE && source === window.MIGU_MUSIC_SOURCE);
       const headers = {};
       if (off != null) headers.range = "bytes=" + off + "-" + (off + CHUNK - 1);
       const ctrl = new AbortController();
@@ -105,7 +106,7 @@
       try {
         let downloadUrl = source;
         if (dynamic) {
-          try { downloadUrl = await window.SpeedNative.resolveMigu(); }
+          try { downloadUrl = await window.SpeedNative.resolveMigu(source); }
           catch (e) { e.sourceResolve = true; throw e; }
           // 解析期间停止或切换节点后，不得再启动旧节点的媒体下载。
           if (ctrl.signal.aborted || !this.running || this.url !== source) {
@@ -116,7 +117,7 @@
         const status = resp.status;
         if (!resp.ok && status !== 206) {
           if (dynamic && [401, 403, 404, 410, 660, 661].includes(status)) {
-            await window.SpeedNative.rejectMigu(downloadUrl);
+            await window.SpeedNative.rejectMigu(downloadUrl, source);
           }
           if (status === 416) this.stat.s416++;
           else if (status === 429) { this.stat.s429++; this.stat.s4xx++; }

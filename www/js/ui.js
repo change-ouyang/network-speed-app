@@ -1,4 +1,4 @@
-// UI 编排：选择器、指标刷新、弹窗、全屏图表、海报分享、IP 卡
+// UI 编排：选择器、指标刷新、弹窗、海报分享、IP 卡
 (function () {
   "use strict";
 
@@ -98,13 +98,15 @@
 
   // ---------- 线程数 ----------
   // 端口阵列即线程可视化：亮灯数量 = 线程数，运行中按端口序错相闪烁
-  function updatePortGrid() {
+  // n 由调用方传入（滑杆当前值/存储值）；engine.threads 只在 start/setThreads 后才同步，
+  // 直接读它会出现「配置 32 灯只亮 8」的错位
+  function updatePortGrid(n) {
     const grid = $("portGrid");
     if (!grid) return;
-    const n = engine.threads;
+    const count = n || engine.threads;
     for (const p of grid.children) {
       const port = parseInt(p.dataset.port, 10);
-      p.classList.toggle("on", port <= n);
+      p.classList.toggle("on", port <= count);
       if (!p.style.getPropertyValue("--d")) p.style.setProperty("--d", ((port - 1) % 8 * 0.09).toFixed(2) + "s");
     }
   }
@@ -113,7 +115,7 @@
     const slider = $("threadSlider");
     slider.value = n;
     slider.style.setProperty("--pct", ((n - 1) / 31 * 100).toFixed(1) + "%");
-    updatePortGrid();
+    updatePortGrid(n);
   }
   $("threadSlider").addEventListener("input", (e) => {
     const n = parseInt(e.target.value, 10);
@@ -466,7 +468,7 @@
     openModal("使用说明",
       "<p>多线程循环下载真实文件，主动消耗流量并测速。<b>总使用量</b>进入页面自动清零（点数字可手动清零）；<b>用量上限</b>只对本次测试生效。</p>" +
       "<p><b>后台测速</b>：开「后台运行」后切后台/息屏，下载交棒原生线程继续；部分 ROM 需在系统设置允许本应用后台运行并忽略电池优化。</p>" +
-      "<p><b>咪咕视频节点</b>走官方调度链；是否计入定向流量以运营商账单为准（需蜂窝网络 + 关闭 VPN，统计有延迟）。</p>" +
+      "<p><b>咪咕视频/音乐节点</b>走官方调度链实时解析；是否计入定向流量以运营商账单为准（需蜂窝网络 + 关闭 VPN，统计有延迟）。</p>" +
       "<p>自定义地址仅支持 https；测试地址来自公开资源，可能失效。</p>" +
       (await diagLine()) +
       verLine,
@@ -502,55 +504,6 @@
       ]);
   }
 
-  // ---------- 全屏图表 ----------
-  let chartRAF = null;
-  $("btnChart").addEventListener("click", () => {
-    $("chartOverlay").classList.add("open");
-    drawChart();
-  });
-  $("btnChartClose").addEventListener("click", () => {
-    $("chartOverlay").classList.remove("open");
-    if (chartRAF) cancelAnimationFrame(chartRAF);
-  });
-  function drawChart() {
-    const cv = $("chartCanvas");
-    const dpr = window.devicePixelRatio || 1;
-    const w = cv.clientWidth, h = cv.clientHeight;
-    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
-    const ctx = cv.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const hist = engine.history.slice(-180);
-    const css = getComputedStyle(document.documentElement);
-    const accent = css.getPropertyValue("--accent").trim() || "#409eff";
-    const muted = css.getPropertyValue("--muted").trim() || "#909399";
-    // 网格
-    ctx.strokeStyle = muted; ctx.globalAlpha = .25; ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = h * i / 4;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-    if (hist.length > 1) {
-      const maxS = Math.max(...hist.map(p => p.s), 1);
-      ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.beginPath();
-      hist.forEach((p, i) => {
-        const x = i / (hist.length - 1) * w;
-        const y = h - (p.s / maxS) * (h - 20) - 10;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
-      ctx.fillStyle = accent; ctx.globalAlpha = .12; ctx.fill(); ctx.globalAlpha = 1;
-      $("chartNow").textContent = window.formatBytes(engine.speed, 0);
-    } else {
-      ctx.fillStyle = muted;
-      ctx.font = "14px sans-serif";
-      ctx.fillText(engine.running ? "正在采集速率数据…" : "开始测速后展示实时曲线", 16, h / 2);
-    }
-    if ($("chartOverlay").classList.contains("open")) chartRAF = requestAnimationFrame(drawChart);
-  }
-
   // ---------- IP 卡 ----------
   async function loadGeo(force, depth) {
     try {
@@ -574,6 +527,9 @@
   const flat = [];
   groups.forEach(g => g.options.forEach(o => flat.push(o)));
   selectNode((last && flat.find(o => o.value === last.value)) || flat[0]);
+  // 把存储的线程数同步进引擎（后台泵授权、动态增减线程都读 engine.threads），
+  // 再刷新滑杆与端口阵列——两者从此读同一个数
+  engine.setThreads(Store.getThreadNum());
   applyThreadUI(Store.getThreadNum());
   engine.maxUse = Store.getMaxUse();
   engine.speedLimit = Store.getSpeedLimit();
@@ -737,14 +693,9 @@
     syncBgService();   // 回前台重申一次前台服务，防止被系统回收后一直没恢复
   });
 
-  // 系统返回键：优先关掉最上层浮层（弹窗 / 全屏图表 / 下拉），没有浮层时退出应用
+  // 系统返回键：优先关掉最上层浮层（弹窗 / 下拉），没有浮层时退出应用
   function closeTopLayer() {
     if ($("modalMask").classList.contains("open")) { closeModal(); return true; }
-    if ($("chartOverlay").classList.contains("open")) {
-      $("chartOverlay").classList.remove("open");
-      if (chartRAF) cancelAnimationFrame(chartRAF);
-      return true;
-    }
     if ($("sel").classList.contains("open")) { toggleSelect(false); return true; }
     return false;
   }

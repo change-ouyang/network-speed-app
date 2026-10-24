@@ -148,17 +148,17 @@ components:
 全系统唯一注入的颜色世界是「机壳材料色 + LED 发光色」两层；每种色在两种模式下各有一套值（上表 frontmatter 为准）。
 
 ### Primary
-- **机房绿 Accent**（亮 `#17573a` / 暗 `#52e690`）：操作系统的「带电」色——图表轨迹、选中节点、主按钮、线程读数、IP 地址、工具图标。亮色下绿走深以保证对比度，暗色下是 VFD 荧光绿。代码中存在 `--accent-deep` 别名槽（亮暗两模式值均与 `--accent` 相等），亮色规则默认写 `var(--accent-deep)`、暗色逐条覆盖为 `var(--accent)`——记录为现行的引用模式，值上二者同源。
+- **机房绿 Accent**（亮 `#17573a` / 暗 `#52e690`）：操作系统的「带电」色——选中节点、主按钮、线程读数、IP 地址、工具图标。亮色下绿走深以保证对比度，暗色下是 VFD 荧光绿。代码中存在 `--accent-deep` 别名槽（亮暗两模式值均与 `--accent` 相等），亮色规则默认写 `var(--accent-deep)`、暗色逐条覆盖为 `var(--accent)`——记录为现行的引用模式，值上二者同源。
 - **绿上墨 On-Accent**（亮 `#f4fff7` / 暗 `#06130a`）：落在绿底上的墨色，用于选中文字（`::selection`）与主按钮文字。暗色配深墨、亮色配浅墨，跟随机壳翻转。
 
 ### Secondary
-- **LED 绿**（亮 `#23a457` / 暗 `#37e07d`）：设备指示灯专用绿，与 Accent 绿是两种器件：LED 绿长在灯泡上（PWR/RUN 灯、端口 LED 条、带宽段条、开关选中描边、键盘焦点环），Accent 绿长在面板丝印上（图表、选中态、主按钮）。两绿不混用。
+- **LED 绿**（亮 `#23a457` / 暗 `#37e07d`）：设备指示灯专用绿，与 Accent 绿是两种器件：LED 绿长在灯泡上（PWR/RUN 灯、端口 LED 条、带宽段条、开关选中描边、键盘焦点环），Accent 绿长在面板丝印上（选中态、主按钮）。两绿不混用。
 
 ### Tertiary
 - **危险红 Danger**（亮 `#9c2018` / 暗 `#ff7a6e`）：免责声明框、删除动作、退出按钮、报错文字。边框用 `color-mix(in srgb, var(--danger) 40%, transparent)` 褪色铸框。
 
 ### Neutral
-- **车间墙面 BG**（亮 `#d3d0c8` / 暗 `#0e1114`）：页面底，暗色下同时是全屏图表的底。
+- **车间墙面 BG**（亮 `#d3d0c8` / 暗 `#0e1114`）：页面底。
 - **机箱喷粉 Chassis**（亮 `#e3e0d8` / 暗 `#161b20`）：铭牌顶栏与资产铭牌的机壳本体；暗色下叠拉丝发丝纹。
 - **模块面板 Panel**（亮 `#eceae2` / 暗 `#1a2026`）：每个模块的面板与浮层（下拉、弹窗、toast、凸按钮）底色。
 - **浅凹面 Inset**（亮 `#f2f0e9` / 暗 `#12171c`）：所有凹进去的介质底——输入框、选择器触发区、滑杆拇指、电源钮面。
@@ -197,9 +197,9 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 
 ## Layout
 
-竖屏单列机箱：`.chassis` 居中，`max-width: 640px`，`min-width: 320px`，页边 12px。模块纵向堆叠，节奏 `margin-top: 10px`；模块内边距 `11px 14px 13px`。所有贴边表面（铭牌顶栏、机箱、全屏图表）用 `env(safe-area-inset-*)` 让位刘海与手势条。铭牌顶栏 `position: sticky` 常驻。
+竖屏单列机箱：`.chassis` 居中，`max-width: 640px`，`min-width: 320px`，页边 12px。模块纵向堆叠，节奏 `margin-top: 10px`；模块内边距 `11px 14px 13px`。所有贴边表面（铭牌顶栏、机箱）用 `env(safe-area-inset-*)` 让位刘海与手势条。铭牌顶栏 `position: sticky` 常驻。
 
-固定栅格只有两处：端口阵列 `repeat(16, 1fr)`（32 口两行，gap 6px 3px，一页展示密度）与计量三联窗 `1fr 1fr 1fr`（gap 8px）。z 轴梯队：铭牌 10 < 下拉面板 30 < 全屏图表 50 < 维护盖板 60 < toast 99。返回键逐层关闭浮层（无浮层才退出）。
+固定栅格只有两处：端口阵列 `repeat(16, 1fr)`（32 口两行，gap 6px 3px，一页展示密度）与计量三联窗 `1fr 1fr 1fr`（gap 8px）。z 轴梯队：铭牌 10 < 下拉面板 30 < 维护盖板 60 < toast 99。返回键逐层关闭浮层（无浮层才退出）。
 
 主操作（电源钮 72px）位于首屏下半部拇指区；页面按 412×760 一页展示实测零溢出；长挂工具，视觉不添乱——密度是「设备面板」的密度，不是「营销页」的密度。页面 `user-select: none`，仅输入框放开文本选择；滚动条全部隐藏。
 
@@ -217,7 +217,7 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 
 ### Shadow Vocabulary
 - **raised-panel**（`inset 0 1px 0 rgba(255,255,255,.28), 0 3px 10px var(--shadow)`）：模块与弹窗面板；暗色下高光换 .045。
-- **button-lift**（`0 1px 0 rgba(255,255,255,.35), 0 2px 4px var(--shadow)`）：全部凸按钮（manual / monitor / m-btn / 滑杆拇指）；暗色高光换 .05。
+- **button-lift**（`0 1px 0 rgba(255,255,255,.35), 0 2px 4px var(--shadow)`）：全部凸按钮（manual / m-btn / 滑杆拇指）；暗色高光换 .05。
 - **well-inset**（`inset 0 2px 5px var(--shadow)`）：输入与选择触发区。
 - **well-deep**（`inset 0 3px 9px var(--shadow)`）：计量窗 LCD。
 - **modal-lift**（`0 10px 34px rgba(0,0,0,.4)`)：维护盖板弹窗。
@@ -244,7 +244,7 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 机箱里的标准槽位件。Panel 底、弱线框、14px 圆角、凸面阴影；首行 module-tag = 中文主标（Label 声部）+ 右侧英文丝印代号（Code 声部），底部弱线下划。四个模块：LINK / PORTS / METERING / POWER。
 
 ### 端口阵列（Port Array）——签名组件
-线程配置的物理化身：32 只插口（Socket 底 + 强线框 + 3px 圆角），端口号以 7px 等宽铸在插口内，LED 条（3.5px 高）压在插口底部。亮灯数 = 线程数（`port <= n` 加 `.on`）；运行中按 `--d = ((port-1) % 8) × 0.09s` 错相闪烁（`port-blink 1s steps(2, jump-none) infinite`），点亮时插口框线向 LED 绿靠（`color-mix 45%`）。JS 只写类与 `--d`，一切呈现归 CSS。
+线程配置的物理化身：32 只插口（Socket 底 + 强线框 + 3px 圆角），端口号以 7px 等宽铸在插口内，LED 条（3.5px 高）压在插口底部。亮灯数 = 配置的线程数（`port <= n` 加 `.on`；n 由滑杆/存储值传入，不读引擎运行态——两处必须同源）；运行中按 `--d = ((port-1) % 8) × 0.09s` 错相闪烁（`port-blink 1s steps(2, jump-none) infinite`），点亮时插口框线向 LED 绿靠（`color-mix 45%`）。JS 只写类与 `--d`，一切呈现归 CSS。
 
 ### 计量窗（Meter Window）
 三联窗：LCD 面底 + 深凹阴影 + 8px 圆角；窗头 0.74rem 标签（暗色下转 muted）+ 角上图标针钮；读数钉在窗底（`margin-top: auto`），Meter 声部 + `tabular-nums`。带宽窗多一条 7px LED 段条：JS 只写 `--w`（0–500Mbps 线性映射），clip-path 揭示，`transition: clip-path .4s`。
@@ -256,19 +256,16 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 42×22px 方形滑槽（Socket 空腔 + 内凹阴影）+ 16px 方形滑块（3px 圆角、顶缘高光）；拨上 `translateX(20px)`，选中时槽与滑块描边转 LED 绿。两只：后台运行 / 自动运行。
 
 ### 单位下拉（Unit Select）
-数字 + 单位成对输入件（`.unit-row`）：m-input 占 flex:1，`.m-select`（88px、Code 声部、inset 底 + 内凹阴影）钉在右侧。用量上限（MB/GB）与限速（MB/s、GB/s）共用；存储恒为字节，重开弹框时按 ≥1GB 自动回选 GB 并回填纯数字。
+数字 + 单位成对输入件（`.unit-row`）：m-input 占 flex:1 且行内 `margin-top:0`（吃掉 m-input 自带的 6px 顶距，与下拉严格同高同行），`.m-select`（88px、Code 声部、inset 底 + 内凹阴影、`align-self:stretch`）钉在右侧。用量上限（MB/GB）与限速（MB/s、GB/s）共用；存储恒为字节，重开弹框时按 ≥1GB 自动回选 GB 并回填纯数字。
 
 ### 选择器（Select）
 触发区是凹面输入（inset 底 + 强线框 + 9px 圆角 + 内凹阴影），左链路图标（Accent 绿）、右展开箭头（`.open` 旋转 180°）。下拉面板 = 凸面板浮层（z 30），分组标题用 Code 声部（.78rem），选中项 Accent 绿加粗。键盘：Enter/Space 展开与选中；`focus-visible` 用 Accent 内描边（-2px）。
 
 ### 按钮（Buttons）
-三档语法：图标针钮（pin/panel-btn，30px 方，7px 圆角，inset 底，muted 图标）／动作钮（manual、monitor、m-btn：panel 底 + 强线框 + 9px 圆角 + 按压下沉）／m-btn 变体（primary=Accent 底绿上墨；plain=inset 底；danger=Danger 底白字）。无 hover 特效——触屏设备，状态只有按压。
+三档语法：图标针钮（pin/panel-btn，30px 方，7px 圆角，inset 底，muted 图标）／动作钮（manual、m-btn：panel 底 + 强线框 + 9px 圆角 + 按压下沉）／m-btn 变体（primary=Accent 底绿上墨；plain=inset 底；danger=Danger 底白字）。无 hover 特效——触屏设备，状态只有按压。
 
 ### 维护盖板（Modal）——签名组件
 弹窗即检修盖板：panel 底、14px 圆角、上下各一对螺丝（radial-gradient 圆点随宽自适应贴角）。标题居中（Display 规格），正文 0.92rem/1.7，输入框为凹面 m-input（聚焦转 Accent 边）。遮罩点击关闭。
-
-### 监视窗（Chart Overlay）
-全屏图表（z 50，bg 底）：canvas 每帧从 `:root` 实读 `--accent` 与 `--muted`（世界与图表永远同色，无硬编码副本）；网格线 muted @25% 透明度，轨迹 Accent 2px，下方 12% 透明填充；当前速率用 Meter 声部。
 
 ### 资产铭牌（Asset Plate）与 Toast
 铭牌：机壳底（暗色下拉丝）+ 10px 圆角，NET 丝印、IP（Meter 声部 Accent 绿）、地理行、出厂条码 + 序列号。Toast：底部 12% 悬浮的机壳窄条（9px 圆角、强线框、6px 投影），一次性状态播报。
@@ -286,10 +283,9 @@ PRODUCT.md 的离线约束排除了外部字体，故本世界没有独立 displ
 - **Do** 新「标题」用铭牌组合：中文粗体名 + 等宽追踪大写英文代号。
 - **Do** 器件先定凹凸：读/填的凹下去配内阴影，可按的凸起来配顶缘高光；按压一律 `translateY(1px)` 下沉。
 - **Do** 双模式成对交付：每个颜色/高光/介质效果亮暗各验一遍（拉丝只验暗壳，LCD 辉光只验暗窗）。
-- **Do** 图表/Canvas 从 `:root` 实读 `--accent`/`--muted`，与世界保持同源。
 
 ### Don't:
-- **Don't** 引入蓝色仪表盘脸：类别默认的蓝色渐变测速页是本世界的反面（图表 JS 里遗留的 `#409eff` 兜底色是死代码，不是系统色）。
+- **Don't** 引入蓝色仪表盘脸：类别默认的蓝色渐变测速页是本世界的反面。
 - **Don't** 给非发光表面加辉光；LED/VFD 的光是介质本性，不是装饰手法。
 - **Don't** 用 LED 绿画丝印/数据，或用 Accent 绿点灯——两绿分工不可混。
 - **Don't** 在亮色机壳上加拉丝或高光纹理；喷粉面是哑光的。

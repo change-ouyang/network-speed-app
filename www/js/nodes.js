@@ -1,13 +1,15 @@
 // 节点清单：整理自 270666.xyz 公开测速节点（2026-10-05 实测抓取），App 端经原生网络栈直连
 // disabled: true 的分组保留数据但不展示（全球海外组，按需求停用）
-// 动态节点保存官网节目页标识；实际 HTTPS 视频分片由 Android 在运行时解析。
+// 动态节点（咪咕视频/咪咕音乐）保存官网页面标识；实际媒体直链由 Android 在运行时解析并按次续签。
 window.MIGU_VIDEO_SOURCE = "https://www.miguvideo.com/p/vertical/968151936";
+window.MIGU_MUSIC_SOURCE = "https://music.migu.cn/v3/web/song/600908000003562466";
 window.NODE_GROUPS = [
   {
     label: "270专项",
     options: [
-      { label: "咕咪快游2", value: "https://gcache.migu.cn/depository_cmamgame01_dob01/channel_for_homepage_game2/202608/0513/49/B1589500/media/1111301_m3u8_ts/00000.ts" },
-      { label: "咪咕视频2", value: window.MIGU_VIDEO_SOURCE }
+      { label: "咕咪快游1", value: "https://gcache.migu.cn/depository_cmamgame01_dob01/channel_for_homepage_game2/202608/0513/49/B1589500/media/1111301_m3u8_ts/00000.ts" },
+      { label: "咪咕视频1", value: window.MIGU_VIDEO_SOURCE },
+      { label: "咪咕音乐1", value: window.MIGU_MUSIC_SOURCE }
     ]
   },
   {

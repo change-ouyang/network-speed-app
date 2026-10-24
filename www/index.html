@@ -122,10 +122,6 @@
           </label>
         </div>
       </div>
-      <button class="monitor-btn" id="btnChart" aria-label="全屏图表">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
-        监视窗 MONITOR
-      </button>
       <div class="run-status" id="runStatus"></div>
     </section>
 
@@ -142,16 +138,6 @@
 
     <p class="disclaimer">本工具仅用于流量消耗与网络速率自查，请勿用于非法用途，使用本工具造成的一切后果由用户承担！</p>
   </main>
-
-  <!-- 监视窗：全屏速率图表 -->
-  <div class="chart-overlay" id="chartOverlay">
-    <div class="chart-head">
-      <span>实时速率</span>
-      <span class="chart-now" id="chartNow">-</span>
-      <button class="panel-btn" id="btnChartClose" aria-label="关闭图表"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></button>
-    </div>
-    <canvas id="chartCanvas"></canvas>
-  </div>
 
   <!-- 维护盖板：通用弹窗 -->
   <div class="modal-mask" id="modalMask">

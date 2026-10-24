@@ -28,7 +28,8 @@
     // 供用户对照运营商定向流量白名单（HTTPS 下运营商只能按 IP/SNI 识别归属）
     get miguDiag() { return miguDiag; },
     // 短缓存减少下载循环中的桥调用；原生侧负责真正的有效期与前后台共用缓存。
-    async resolveMigu() {
+    // source 区分视频/音乐动态节点，缓存按节点隔离，切换节点不会串地址。
+    async resolveMigu(source) {
       const p = plugin("SpeedService");
       if (!isNative() || !p || !p.resolveMigu) {
         const e = new Error(isNative()
@@ -37,16 +38,21 @@
         e.nodeUnavailable = true;
         throw e;
       }
-      if (miguCached && Date.now() < miguCached.until) return miguCached.url;
+      const src = String(source || "");
+      if (miguCached && miguCached.source === src && Date.now() < miguCached.until) return miguCached.url;
       if (!miguPending) {
-        miguPending = p.resolveMigu().then(r => {
+        miguPending = p.resolveMigu({ source: src }).then(r => {
           const u = new URL(r.url);
-          // 官方 GSLB 调度链可能给出 http(:8080) 分片（App 已对 miguvideo.com 单域放行明文）
-          if (!(u.protocol === "https:" || u.protocol === "http:")
-              || !u.hostname.endsWith(".miguvideo.com") || !u.pathname.endsWith(".ts")) {
-            throw new Error("咪咕未返回有效的视频分片");
+          // 视频：GSLB 调度链可能给出 http(:8080) 分片（App 已对 miguvideo.com 单域放行明文）；
+          // 音乐：H5 策略接口签发的直链恒为 https 音频文件（*.migu.cn）
+          const videoOk = (u.protocol === "https:" || u.protocol === "http:")
+              && u.hostname.endsWith(".miguvideo.com") && u.pathname.endsWith(".ts");
+          const musicOk = u.protocol === "https:"
+              && u.hostname.endsWith(".migu.cn") && /\.(mp3|flac|m4a|aac)$/.test(u.pathname);
+          if (!(videoOk || musicOk)) {
+            throw new Error("咪咕未返回有效的媒体地址");
           }
-          miguCached = { url: r.url, until: Date.now() + 30000 };
+          miguCached = { source: src, url: r.url, until: Date.now() + 30000 };
           if (r.host) miguDiag = {
             host: String(r.host),
             v4: Array.isArray(r.v4) ? r.v4 : [],
@@ -57,10 +63,10 @@
       }
       return miguPending;
     },
-    async rejectMigu(url) {
+    async rejectMigu(url, source) {
       if (miguCached && miguCached.url === url) miguCached = null;
       const p = plugin("SpeedService");
-      if (p && p.rejectMigu) await p.rejectMigu({ url });
+      if (p && p.rejectMigu) await p.rejectMigu({ url: String(url || ""), source: String(source || "") });
     },
     // 预请求通知权限（App 启动时一次，避免首次开跑时弹系统对话框打断启动流程）
     async prepPermissions() {
