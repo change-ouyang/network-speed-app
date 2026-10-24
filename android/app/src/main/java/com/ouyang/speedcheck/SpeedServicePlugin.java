@@ -32,8 +32,22 @@ public class SpeedServicePlugin extends Plugin {
     public void resolveMigu(PluginCall call) {
         new Thread(() -> {
             try {
+                String mediaUrl = MiguSourceResolver.resolve(MiguSourceResolver.SOURCE_URL);
                 JSObject result = new JSObject();
-                result.put("url", MiguSourceResolver.resolve(MiguSourceResolver.SOURCE_URL));
+                result.put("url", mediaUrl);
+                // 定向流量按「分片实际落点（IP/SNI）」识别（HTTPS 下运营商看不到 UA/Host）：
+                // 把分片域名与 DNS 解析结果一并带回，说明页展示，用户可对照运营商免流白名单排查。
+                String host = new java.net.URL(mediaUrl).getHost();
+                org.json.JSONArray v4 = new org.json.JSONArray();
+                org.json.JSONArray v6 = new org.json.JSONArray();
+                try {
+                    for (java.net.InetAddress addr : java.net.InetAddress.getAllByName(host)) {
+                        (addr.getAddress().length == 4 ? v4 : v6).put(addr.getHostAddress());
+                    }
+                } catch (Exception ignored) { }
+                result.put("host", host);
+                result.put("v4", v4);
+                result.put("v6", v6);
                 call.resolve(result);
             } catch (Exception e) {
                 call.reject(e.getMessage());

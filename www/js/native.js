@@ -20,9 +20,13 @@
 
   let miguCached = null;
   let miguPending = null;
+  let miguDiag = null;
 
   window.SpeedNative = {
     isNative,
+    // 最近一次咪咕解析的分片落点 {host, v4:[], v6:[]}：说明页诊断行展示，
+    // 供用户对照运营商定向流量白名单（HTTPS 下运营商只能按 IP/SNI 识别归属）
+    get miguDiag() { return miguDiag; },
     // 短缓存减少下载循环中的桥调用；原生侧负责真正的有效期与前后台共用缓存。
     async resolveMigu() {
       const p = plugin("SpeedService");
@@ -37,10 +41,17 @@
       if (!miguPending) {
         miguPending = p.resolveMigu().then(r => {
           const u = new URL(r.url);
-          if (u.protocol !== "https:" || !u.hostname.endsWith(".miguvideo.com") || !u.pathname.endsWith(".ts")) {
+          // 官方 GSLB 调度链可能给出 http(:8080) 分片（App 已对 miguvideo.com 单域放行明文）
+          if (!(u.protocol === "https:" || u.protocol === "http:")
+              || !u.hostname.endsWith(".miguvideo.com") || !u.pathname.endsWith(".ts")) {
             throw new Error("咪咕未返回有效的视频分片");
           }
           miguCached = { url: r.url, until: Date.now() + 30000 };
+          if (r.host) miguDiag = {
+            host: String(r.host),
+            v4: Array.isArray(r.v4) ? r.v4 : [],
+            v6: Array.isArray(r.v6) ? r.v6 : []
+          };
           return r.url;
         }).finally(() => { miguPending = null; });
       }

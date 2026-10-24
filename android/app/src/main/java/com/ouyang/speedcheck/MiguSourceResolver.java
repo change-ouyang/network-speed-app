@@ -28,7 +28,7 @@ public final class MiguSourceResolver {
             new HttpsTransport(), System::currentTimeMillis);
 
     interface Clock { long now(); }
-    interface Transport { TextResponse get(String url, boolean api) throws Exception; }
+    interface Transport { TextResponse get(String url, boolean api, boolean forceHttps) throws Exception; }
 
     static final class TextResponse {
         final String url;
@@ -68,48 +68,59 @@ public final class MiguSourceResolver {
     }
 
     // 前台桥与后台所有线程共用缓存，同时到达时只向官网解析一次。
+    // 两级策略：先按官方链路原样走（http 也照发，让 GSLB 302 把我们派到运营商免流池）；
+    // 失败（如网络禁明文 8080）再回退到全 https 链路保底。两条链都失败才进入退避。
     synchronized String mediaUrl() throws Exception {
         checkInterrupted();
         long now = clock.now();
         if (cachedUrl != null && now < expiresAt) return cachedUrl;
         if (now < retryAt) throw new IOException(lastError);
         try {
-            TextResponse api = transport.get(playUrlRequest(now), true);
-            JSONObject response = new JSONObject(api.text);
-            JSONObject body = object(response, "body");
-            JSONObject info = object(body, "urlInfo");
-            JSONObject content = object(body, "content");
-            if (!"SUCCESS".equals(response.optString("rid")) || info == null || content == null) {
-                throw new IOException("咪咕暂未提供该免费视频，请稍后重试");
+            return resolveChain(now, false);
+        } catch (Exception first) {
+            checkInterrupted();
+            try {
+                return resolveChain(now, true);
+            } catch (Exception second) {
+                cachedUrl = null;
+                lastError = second instanceof IOException ? second.getMessage() : "咪咕播放数据格式已变化，请稍后重试";
+                retryAt = clock.now() + RETRY_MS;
+                throw new IOException(lastError, second);
             }
-            if (Boolean.TRUE.equals(content.opt("drm")) || Boolean.TRUE.equals(content.opt("isDrmContent"))
-                    || positive(info.optString("trySeeDuration"))) {
-                throw new IOException("咪咕返回了受限内容，已停止解析");
-            }
-            String contentId = content.optString("contId");
-            if (!CONTENT_ID.equals(contentId)) throw new IOException("咪咕返回的节目不匹配");
-            String signed = signMediaUrl(info.getString("url"), contentId, now);
-            TextResponse playlist = transport.get(httpsOfficial(signed), false);
-            // 最多两层主清单；分片相对路径必须以重定向后的最终 URL 为基准。
-            for (int level = 0; level < 3; level++) {
-                String resource = firstResource(playlist);
-                if (new URL(resource).getPath().endsWith(".ts")) {
-                    checkInterrupted();
-                    cachedUrl = resource;
-                    expiresAt = clock.now() + CACHE_MS;
-                    retryAt = clock.now() + RETRY_MS;
-                    lastError = null;
-                    return cachedUrl;
-                }
-                playlist = transport.get(resource, false);
-            }
-            throw new IOException("咪咕视频清单层级异常");
-        } catch (Exception e) {
-            cachedUrl = null;
-            lastError = e instanceof IOException ? e.getMessage() : "咪咕播放数据格式已变化，请稍后重试";
-            retryAt = clock.now() + RETRY_MS;
-            throw new IOException(lastError, e);
         }
+    }
+
+    private String resolveChain(long now, boolean forceHttps) throws Exception {
+        TextResponse api = transport.get(playUrlRequest(now), true, forceHttps);
+        JSONObject response = new JSONObject(api.text);
+        JSONObject body = object(response, "body");
+        JSONObject info = object(body, "urlInfo");
+        JSONObject content = object(body, "content");
+        if (!"SUCCESS".equals(response.optString("rid")) || info == null || content == null) {
+            throw new IOException("咪咕暂未提供该免费视频，请稍后重试");
+        }
+        if (Boolean.TRUE.equals(content.opt("drm")) || Boolean.TRUE.equals(content.opt("isDrmContent"))
+                || positive(info.optString("trySeeDuration"))) {
+            throw new IOException("咪咕返回了受限内容，已停止解析");
+        }
+        String contentId = content.optString("contId");
+        if (!CONTENT_ID.equals(contentId)) throw new IOException("咪咕返回的节目不匹配");
+        String signed = signMediaUrl(info.getString("url"), contentId, now);
+        TextResponse playlist = transport.get(official(signed, forceHttps), false, forceHttps);
+        // 最多两层主清单；分片相对路径必须以重定向后的最终 URL 为基准。
+        for (int level = 0; level < 3; level++) {
+            String resource = firstResource(playlist, forceHttps);
+            if (new URL(resource).getPath().endsWith(".ts")) {
+                checkInterrupted();
+                cachedUrl = resource;
+                expiresAt = clock.now() + CACHE_MS;
+                retryAt = clock.now() + RETRY_MS;
+                lastError = null;
+                return cachedUrl;
+            }
+            playlist = transport.get(resource, false, forceHttps);
+        }
+        throw new IOException("咪咕视频清单层级异常");
     }
 
     private static JSONObject object(JSONObject value, String name) {
@@ -161,17 +172,24 @@ public final class MiguSourceResolver {
         return url + "&ddCalcu=" + value + "&sv=10004&ct=android";
     }
 
-    static String httpsOfficial(String raw) throws Exception {
+    /**
+     * 只放行咪咕官方域，防重定向外逃。默认保持 GSLB 给的原始协议与端口——
+     * 官方调度链是 http（常见 :8080），强制升级 https 会绕过 302 派发、
+     * 落到公共 CDN 池（不计运营商定向流量）；forceHttps=true 时才升级（保底链路）。
+     */
+    static String official(String raw, boolean forceHttps) throws Exception {
         URL url = new URL(raw);
         String host = url.getHost().toLowerCase(Locale.ROOT);
         if (!(host.equals("miguvideo.com") || host.endsWith(".miguvideo.com"))
                 || !(url.getProtocol().equals("http") || url.getProtocol().equals("https"))
                 || url.getUserInfo() != null) throw new IOException("咪咕返回了非官方资源地址");
-        // 官方调度有时给出 HTTP:8080；已验证同节点支持标准 HTTPS，不放宽 App 明文策略。
-        return "https://" + host + url.getFile();
+        if (forceHttps && url.getProtocol().equals("http")) {
+            return "https://" + host + url.getFile();
+        }
+        return raw;
     }
 
-    static String firstResource(TextResponse playlist) throws Exception {
+    static String firstResource(TextResponse playlist, boolean forceHttps) throws Exception {
         String text = playlist.text.trim();
         if (!text.startsWith("#EXTM3U")) throw new IOException("咪咕未返回有效的视频清单");
         for (String line : text.split("\\r?\\n")) {
@@ -186,7 +204,7 @@ public final class MiguSourceResolver {
         for (String line : text.split("\\r?\\n")) {
             line = line.trim();
             if (line.isEmpty() || line.startsWith("#")) continue;
-            String resource = httpsOfficial(new URL(new URL(playlist.url), line).toString());
+            String resource = official(new URL(new URL(playlist.url), line).toString(), forceHttps);
             String path = new URL(resource).getPath();
             if ((master && path.endsWith(".m3u8")) || (!master && path.endsWith(".ts"))) return resource;
             throw new IOException("咪咕视频分片格式暂不支持");
@@ -200,8 +218,8 @@ public final class MiguSourceResolver {
 
     private static final class HttpsTransport implements Transport {
         @Override
-        public TextResponse get(String raw, boolean api) throws Exception {
-            String target = httpsOfficial(raw);
+        public TextResponse get(String raw, boolean api, boolean forceHttps) throws Exception {
+            String target = official(raw, forceHttps);
             long deadline = System.nanoTime() + 15_000_000_000L;
             for (int hop = 0; hop < 5; hop++) {
                 checkInterrupted();
@@ -222,7 +240,7 @@ public final class MiguSourceResolver {
                     if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
                         String location = conn.getHeaderField("Location");
                         if (location == null) throw new IOException("咪咕调度缺少目标地址");
-                        target = httpsOfficial(new URL(new URL(target), location).toString());
+                        target = official(new URL(new URL(target), location).toString(), forceHttps);
                         continue;
                     }
                     if (status != 200) throw new IOException("咪咕解析请求失败（HTTP " + status + "）");

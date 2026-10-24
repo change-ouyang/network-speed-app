@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 默认禁止明文（自定义节点仍要求 https）。唯一例外：咪咕官方视频域——
+         官方播放器的调度链是 http(:8080) 302 派发，强制 https 会绕过 GSLB、
+         落到公共 CDN 池（不计运营商定向流量）。仅放行官方域，不放松其它地址。 -->
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">miguvideo.com</domain>
+    </domain-config>
+</network-security-config>

@@ -21,6 +21,38 @@ test('32 个下载线程共享一次原生解析', async () => {
   assert.equal(calls, 1);
 });
 
+test('解析结果携带分片落点诊断，供对照运营商定向流量白名单', async () => {
+  const c = setup({ resolveMigu: async () => ({
+    url: media,
+    host: 'hlszymgspvod.miguvideo.com',
+    v4: ['39.134.91.91', '39.134.91.89'],
+    v6: ['2409:8087:1e01:14::104']
+  }) });
+  await c.SpeedNative.resolveMigu();
+  const diag = c.SpeedNative.miguDiag;
+  assert.equal(diag.host, 'hlszymgspvod.miguvideo.com');
+  assert.deepEqual(diag.v4, ['39.134.91.91', '39.134.91.89']);
+  assert.deepEqual(diag.v6, ['2409:8087:1e01:14::104']);
+});
+
+test('官方 GSLB 调度给出 http:8080 分片时照常放行下载', async () => {
+  // 官方播放器走 GSLB 302 派发，分片常见 http://host:8080/....ts（App 对 miguvideo.com 单域放行明文）
+  const gslbMedia = 'http://hlszymgspvod.miguvideo.com:8080/asset/part_0-0.ts?msisdn=x';
+  let downloaded = null;
+  const c = setup({ resolveMigu: async () => ({ url: gslbMedia }) }, async url => {
+    downloaded = url;
+    return { ok: true, status: 200, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(256) };
+  });
+  assert.equal(await c.SpeedNative.resolveMigu(), gslbMedia);
+  const e = new c.SpeedEngine();
+  e.running = true;
+  e.url = c.MIGU_VIDEO_SOURCE;
+  try {
+    assert.equal((await e._request(null)).bytes, 256);
+    assert.equal(downloaded, gslbMedia);
+  } finally { e.stop(); }
+});
+
 test('媒体被拒后清缓存，旧请求不清除新地址', async () => {
   let calls = 0;
   const c = setup({ resolveMigu: async () => ({ url: media + (++calls) }), rejectMigu: async () => {} });

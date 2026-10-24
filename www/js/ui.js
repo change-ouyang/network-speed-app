@@ -417,13 +417,22 @@
       if (bat && bat.exempt === false) envTxt += "；省电豁免：未开启（后台易被系统冻结）";
     } catch (e) {}
     if (lastBgError) envTxt += "；最近服务启动失败：" + lastBgError;
+    // 咪咕节点：分片实际落点（域名 + DNS 解析出的 IP）——定向流量按落点识别，摆出来才能对答案
+    let miguTxt = "";
+    const diag = window.SpeedNative.miguDiag;
+    if (diag && diag.host) {
+      const ips = (diag.v4 || []).concat(diag.v6 || []);
+      miguTxt = "；咪咕分片落点 " + escapeHTML(diag.host) +
+        (ips.length ? "（" + escapeHTML(ips.join("、")) + "）" : "") +
+        "，是否计入定向流量以运营商对该域名/IP 段的白名单为准";
+    }
     return "<p class='muted'><b>本次诊断</b>：请求 " + (s.req || 0) + " 次（成功 " + (s.ok || 0) +
       "、越界 416 " + (s.s416 || 0) + "、限流 429 " + (s.s429 || 0) + "、其它 4xx " + (s.s4xx || 0) +
       "、5xx " + (s.s5xx || 0) + "）；超时 " + (s.timeout || 0) + "、网络错误 " + (s.netErr || 0) +
       "、重建连接 " + (engine._revives || 0) + " 次；策略 " + modeTxt + "（文件 " + sizeTxt + "）" +
       "；进入后台 " + bgCount + " 次共 " + Math.round(bgMs / 1000) + " 秒" +
       (pumpTotal > 0 ? "，其中原生后台泵消耗 " + window.formatBytes(pumpTotal, 1) : "") +
-      envTxt + "。</p>";
+      miguTxt + envTxt + "。</p>";
   }
 
   $("btnAbout").addEventListener("click", async () => {
@@ -439,6 +448,7 @@
       "<p>4、测试地址整理自互联网公开资源，可能随时间失效，可在「自定义地址」中添加替换；</p>" +
       "<p>5、App 端通过原生网络栈直连，无浏览器跨域限制；仅支持 https 地址（http 会被 Android 明文策略拦截）。</p>" +
       "<p>6、<b>总使用量</b>为累计值（跨启动保留），点一下该数字即可清零；<b>用量上限</b>只对本次测试生效。测试中若长时间收不到数据，会自动重建连接重试，不会直接停止；偶发的请求失败会静默重试（不再弹提示打扰）。</p>" +
+      "<p>7、<b>咪咕视频节点与定向流量</b>：解析与下载完整复刻官方 App 的调度链（GSLB 302 派发，分片可能走 http:8080，仍限 miguvideo.com 官方域）。流量能否计入定向流量由运营商识别，需同时满足：手机用蜂窝数据（Wi-Fi 下载不产生蜂窝流量）、<b>关闭 VPN/代理</b>（开启后运营商会把全部流量转成通用流量）、套餐确实包含咪咕视频定向（部分套餐排除短视频/竖屏等特定内容）。定向流量统计常有延迟，请以运营商 App 或账单为准；实际落点见下方诊断行。</p>" +
       (await diagLine()) +
       verLine,
       [{ text: "关闭", cls: "plain", fn: closeModal }]);
