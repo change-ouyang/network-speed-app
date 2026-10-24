@@ -21,8 +21,8 @@ window.NODE_GROUPS = [
   {
     label: "热门应用",
     options: [
-      { label: "微软商店", value: "https://cdn.microsoftstore.com.cn/media/product_long_description/3781-00000/2_dupn50xr/4h0yzz2_360.jpg" },
-      { label: "腾讯游戏", value: "https://ossweb-img.qq.com/images/lol/web201310/skin/big10001.jpg" },
+      { label: "微信", value: "https://dldir1.qq.com/weixin/Windows/WeChatSetup.exe" },
+      { label: "微软 VS Code", value: "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64" },
       { label: "快手", value: "https://alimov2.a.kwimgs.com/upic/2024/11/18/17/BMjAyNDExMTgxNzM0NTFfMjQ2MzY1ODI4MV8xNDg5NTc1NTQwNDBfMl8z_b_Ba0e085802ad867415b13e560bab69dd2.mp4" },
       { label: "Bilibili", value: "https://s1.hdslb.com/bfs/game-static/web/caster/static/script/vue/da3f37d7fd8339357ed671a94941757e/st.zip" },
       { label: "爱奇艺", value: "https://static-d.iqiyi.com/ext/common/iQIYIMedia_000.dmg" },
