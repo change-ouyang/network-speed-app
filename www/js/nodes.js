@@ -28,16 +28,17 @@ window.NODE_GROUPS = [
   }
 ];
 
-// 定向活动（整理自 270666.xyz「活动/权益」区，2026-10-24 抓取）。
-// 原站按省份放行完整名单（服务器端下发），此处只收录可直链的项目；
-// url 为空的条目在弹窗里纯展示（领取入口在对应 APP 内）。
+// 定向活动（清单来自 270666.xyz「活动/权益」区 + 用户补充，2026-10-24）：
+// 5G-A 提速包 + 七个定向包；url 为空的条目在弹窗里纯展示（领取入口在对应 APP 内）。
 window.MIGU_ACTIVITIES = [
-  { label: "5G-A 体验4小时提速包", note: "网龄成长计划", url: "https://dev.coc.10086.cn/coc/web6/ageFeedbackV2/?pageId=1879720710683729920" },
-  { label: "咕咪快游（50G）", note: "咪咕快游 APP 内领取", url: "" },
-  { label: "咕咪视频（50G）", note: "活动页直达", url: "https://m.miguvideo.com/m/provincevml/c3b5b1441d37402699644fbd83e04684" },
-  { label: "咕咪音乐（30G）", note: "月包，需跳转至咪咕音乐APP领取", url: "https://y.migu.cn/app/rbt/act/zt/2025/flow-month/index.html" },
-  { label: "移动云盘（30G）", note: "云盘签到/领取入口", url: "https://caiyun.feixin.10086.cn" },
-  { label: "中移网大（20G）", note: "领取链接见中国移动APP", url: "" }
+  { label: "5G-A 体验4小时提速包", url: "https://dev.coc.10086.cn/coc/web6/ageFeedbackV2/?pageId=1879720710683729920" },
+  { label: "咕咪快游（50G）", url: "" },
+  { label: "咕咪视频（50G）", url: "https://m.miguvideo.com/m/provincevml/c3b5b1441d37402699644fbd83e04684" },
+  { label: "咕咪音乐（30G）", url: "https://y.migu.cn/app/rbt/act/zt/2025/flow-month/index.html" },
+  { label: "咕咪悦看（30G）", url: "https://n.cmread.com/nap/p/mlln30Ghl.jsp" },
+  { label: "移动云盘（30G）", url: "https://caiyun.feixin.10086.cn" },
+  { label: "云手机（30G）", url: "https://cpability.buy.139.com/freetraffic/#/apporder" },
+  { label: "中移网大（20G）", url: "" }
 ];
 
 // 保留海外组数据，随时可重新启用（App 原生网络无跨域限制）

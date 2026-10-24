@@ -547,7 +547,7 @@ html[data-theme="dark"] .unit-dd-btn:focus-visible { border-color: var(--accent)
 }
 .custom-item .del { color: var(--danger); }
 
-/* 定向活动条目：名称 + 备注 + 外链角标，按压下沉（同面板按钮手感） */
+/* 定向活动条目：统一字重与行高，纯展示条目仅去箭头与点击 */
 .act-item {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 2px;
@@ -556,11 +556,9 @@ html[data-theme="dark"] .unit-dd-btn:focus-visible { border-color: var(--accent)
 }
 .act-item:last-of-type { border-bottom: 0; }
 .act-item:active { transform: translateY(1px); }
-.act-name { font-weight: 600; font-size: .92rem; color: var(--text); flex: none; }
-.act-note { color: var(--muted); font-size: .78rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-name { font-weight: 600; font-size: .92rem; color: var(--text); }
 .act-item svg { margin-left: auto; flex: none; color: var(--accent-deep); }
 .act-item.plain { cursor: default; }
-.act-item.plain .act-name { font-weight: 500; }
 .act-item.plain:active { transform: none; }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .act-item svg { color: var(--accent); }

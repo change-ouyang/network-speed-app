@@ -404,19 +404,16 @@
   });
 
   // ---------- 弹窗：定向活动 ----------
-  // 5G-A 提速包 + 定向包清单；有 url 的条目可点（系统浏览器打开），无 url 的纯展示（入口在对应 APP 内）
+  // 5G-A 提速包 + 七个定向包；有 url 的条目可点（系统浏览器打开），无 url 的纯展示（入口在对应 APP 内）
   $("btnActs").addEventListener("click", () => {
     const rows = (window.MIGU_ACTIVITIES || []).map(a => {
       const linked = !!a.url;
       return "<div class='act-item" + (linked ? "" : " plain") + "'" + (linked ? " role='button' tabindex='0' data-url='" + escapeHTML(a.url) + "'" : "") + ">" +
         "<span class='act-name'>" + escapeHTML(a.label) + "</span>" +
-        (a.note ? "<span class='act-note'>" + escapeHTML(a.note) + "</span>" : "") +
         (linked ? "<svg viewBox='0 0 24 24' width='14' height='14' aria-hidden='true'><path d='M5 19h4l9.5-9.5-4-4L5 15v4zM16.2 4.8a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L18 9l-4-4 2.2-2.2z' fill='currentColor'/></svg>" : "") +
         "</div>";
     }).join("");
-    openModal("定向活动",
-      "<p>定向流量包与领取入口（领取后立即生效，有效期 12 个月）。</p>" + rows,
-      [{ text: "关闭", cls: "plain", fn: closeModal }]);
+    openModal("定向活动", rows, [{ text: "关闭", cls: "plain", fn: closeModal }]);
     document.querySelectorAll("#modalBody .act-item[data-url]").forEach(el => {
       const open = async () => {
         const ok = await window.SpeedNative.openExternal(el.dataset.url);
