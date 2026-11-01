@@ -35,14 +35,16 @@ window.NODE_GROUPS = [
 ];
 
 // 定向活动：与 270666.xyz「270交流群专版」（?s=270）活动弹层逐条对齐，
-// 链接经真机 CDP 逐个点击「参与」钮钩取（2026-10-24），顺序同原站。
+// 链接经真机 CDP 逐个点击「参与」钮钩取（2026-10-24）。
+// 排序（2026-11-01 调整）：5G-A 提速包置首；七个定向包与「270专项」节点清单
+// 一致：快游→视频→音乐→悦看→云手机→云盘→网大。
 window.MIGU_ACTIVITIES = [
   { label: "5G-A 体验4小时提速包", url: "https://wap.hb.10086.cn/wapres/wap-h5/dobusiness/0Y5GATY4HTSB.html" },
+  { label: "咪咕快游定向流量【50G】", url: "https://www.migufun.com/miguplay/html/personalTraffic/personalTrafficUp50" },
   { label: "咪咕视频定向流量【50G】", url: "https://s.miguvideo.com/NjAb2eM" },
   { label: "咪咕音乐定向流量【30G】", url: "https://h5.nf.migu.cn/app/v4/zt/2021/directed-flow/index.html" },
   { label: "咪咕悦看定向流量【30G】", url: "https://n.cmread.com/nap/p/mlln30Ghl.jsp" },
   { label: "云手机定向流量【30G】", url: "https://cpability.buy.139.com/freetraffic/#/apporder" },
-  { label: "咪咕快游定向流量【50G】", url: "https://www.migufun.com/miguplay/html/personalTraffic/personalTrafficUp50" },
   { label: "移动云盘定向流量【30G】", url: "https://caiyun.feixin.10086.cn:7071/portal/caiyunOfficialAccount/index.html?path=zeroPurchase" },
   { label: "中移网大定向流量【20G】", url: "https://dev.coc.10086.cn/coc/canvas/package-h5-canvas/online/zhongyiwangda?pageId=1696418506034348032&channelId=P00000132701" }
 ];

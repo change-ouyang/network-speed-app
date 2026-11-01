@@ -115,12 +115,20 @@ html { scrollbar-width: none; }
   opacity: .55;
 }
 .np-main { min-width: 0; }
+/* 系统字体档位（WebView textZoom）放大文字后，固定宽度的按钮会挤占标题空间。
+   标题一律不换行；ui.js 检测到标题放不下时进入紧凑模式（.tight）：收起装饰
+   通风纹、收紧间距，型号行省略号收尾——铭牌在任何字体档位下都保持两行内，
+   而普通宽度下渲染与原设计完全一致。 */
+.np-title { white-space: nowrap; }
 .np-title { font-weight: 700; font-size: .98rem; letter-spacing: .01em; }
 .np-model {
   font-size: 9.5px; letter-spacing: .14em; color: var(--muted);
   margin-top: 1px; text-transform: uppercase;
   font-family: var(--font-mono);
 }
+.nameplate.tight { gap: 8px; }
+.nameplate.tight .vents { display: none; }
+.nameplate.tight .np-model { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .np-lamps { display: flex; gap: 10px; margin-left: auto; flex: none; }
 .lamp {
   width: 9px; height: 9px; border-radius: 50%;

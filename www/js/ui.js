@@ -77,7 +77,11 @@
     currentNode = opt;
     $("selLabel").textContent = opt.label;
     Store.setJSON(Store.K.lastNode, opt);
-    engine.setUrl(opt.value);
+    // 切换节点 = 重置计量（每个定向包各管各的配额）：立即刷新表显并落盘，不等下一秒的 tick
+    if (engine.setUrl(opt.value)) {
+      Store.setTotalUse(0);
+      renderMetrics(engine);
+    }
     buildSelectPanel();
   }
   function toggleSelect(open) {
@@ -136,7 +140,7 @@
   });
 
   // ---------- 主题切换（铭牌栏对比度图标：亮色 ↔ 暗色，默认亮色） ----------
-  const THEME_NAMES = { light: "亮色", dark: "暗色" };
+  // 切换只换配色、不弹任何提示（底部 toast 对这个操作纯属打扰）
   function currentTheme() { return Store.get(Store.K.theme, "light") === "dark" ? "dark" : "light"; }
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
@@ -147,8 +151,20 @@
     const next = currentTheme() === "light" ? "dark" : "light";
     Store.set(Store.K.theme, next);
     applyTheme(next);
-    toast("主题：" + THEME_NAMES[next]);
   });
+
+  // ---------- 铭牌紧凑模式：系统字体档位放大文字时防止标题换行 ----------
+  // 顶栏里按钮宽度固定、文字随系统字体档位（WebView textZoom）放大，会挤占
+  // 「流量消耗器」标题的空间。检测到标题放不下就收起装饰通风纹、收紧间距；
+  // 型号行由 CSS 省略号兜底。检测用 nowrap 后的 scrollWidth/clientWidth 差值。
+  const nameplate = document.querySelector(".nameplate");
+  const npTitle = document.querySelector(".np-title");
+  function syncNameplate() {
+    if (!nameplate || !npTitle) return;
+    nameplate.classList.toggle("tight", npTitle.scrollWidth > npTitle.clientWidth + 1);
+  }
+  window.addEventListener("resize", syncNameplate);
+  syncNameplate();
 
   // ---------- 开关 ----------
   $("swKeepBg").checked = Store.getKeepBg();
@@ -248,6 +264,12 @@
   engine.on("stall", () => {
     toast("节点响应缓慢或已限流，正在等待恢复…", 3000);
     $("runStatus").textContent = "节点响应缓慢或已限流，正在等待恢复…";
+  });
+  // 引擎检测到 CDN 限速（速率长期低于峰值）会自动重建连接恢复满速，这里只提示一声让用户知道
+  // 刚才的速度骤降不是坏了；次数记录在「说明」的诊断行里，不反复打扰
+  engine.on("throttle", () => {
+    toast("检测到节点限流，已自动重建连接", 3000);
+    $("runStatus").textContent = "检测到节点限流，已自动重建连接";
   });
 
   function refreshPlayUI() {
@@ -569,7 +591,9 @@
     return "<p class='muted'><b>本次诊断</b>：请求 " + (s.req || 0) + " 次（成功 " + (s.ok || 0) +
       "、越界 416 " + (s.s416 || 0) + "、限流 429 " + (s.s429 || 0) + "、其它 4xx " + (s.s4xx || 0) +
       "、5xx " + (s.s5xx || 0) + "）；超时 " + (s.timeout || 0) + "、网络错误 " + (s.netErr || 0) +
-      "、重建连接 " + (engine._revives || 0) + " 次；策略 " + modeTxt + "（文件 " + sizeTxt + "）" +
+      "、重建连接 " + (engine._revives || 0) + " 次" +
+      (engine._throttleRevives ? "（其中限流自愈 " + engine._throttleRevives + " 次）" : "") +
+      "；策略 " + modeTxt + "（文件 " + sizeTxt + "）" +
       "；进入后台 " + bgCount + " 次共 " + Math.round(bgMs / 1000) + " 秒" +
       (pumpTotal > 0 ? "，其中原生后台泵消耗 " + window.formatBytes(pumpTotal, 1) : "") +
       miguTxt + envTxt + "。</p>";
@@ -581,7 +605,7 @@
       ? "<p class='muted'>当前版本：" + escapeHTML(String(info.version)) + "（构建 " + escapeHTML(String(info.build)) + "）</p>"
       : "";
     openModal("使用说明",
-      "<p>多线程循环下载真实文件，主动消耗流量并测速。<b>总使用量</b>进入页面自动清零（点数字可手动清零）；<b>用量上限</b>只对本次测试生效。</p>" +
+      "<p>多线程循环下载真实文件，主动消耗流量并测速。<b>总使用量</b>进入页面或切换节点时自动清零（点数字可手动清零）；<b>用量上限</b>只对本次测试生效，切换节点后重新起算。</p>" +
       "<p><b>后台测速</b>：开「后台运行」后切后台/息屏，下载交棒原生线程继续；部分 ROM 需在系统设置允许本应用后台运行并忽略电池优化。</p>" +
       "<p><b>咪咕视频/音乐节点</b>走官方调度链实时解析；是否计入定向流量以运营商账单为准（需蜂窝网络 + 关闭 VPN，统计有延迟）。</p>" +
       "<p>自定义地址仅支持 https；测试地址来自公开资源，可能失效。</p>" +
