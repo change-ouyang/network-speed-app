@@ -1,48 +1,34 @@
 # 流量消耗器 · Android App
 
-复刻 https://270666.xyz 「网络速度自查」的安卓端（仅 Android，debug 侧载包），2026-10-06 起应用显示名更改为「**流量消耗器**」（包名 `com.ouyang.speedcheck`、文件夹名、仓库名均不变）。Capacitor 7 WebView 壳 + 原生 HTML/CSS/JS 单页，打包流水线沿用 `stock_market_watch/build` 方案。
+复刻 https://270666.xyz 「网络速度自查」的安卓端测速工具（Capacitor 7 WebView 壳 + 原生 HTML/CSS/JS 单页），应用名「流量消耗器」，包名 `com.ouyang.speedcheck`。
 
-## 功能（与原站对齐）
+## 功能
 
-- 多线程测速：1–32 线程滑块（默认 8），循环下载测试文件，支持运行中热切换节点/线程
+- 多线程测速：1–32 线程滑块（默认 8），循环下载测试文件，运行中可热切换节点/线程
 - 内置 16 个节点（270专项 2 + 热门应用 9 + 运营商 5）+ 自定义地址（名称 + URL）
-- 270专项新增「咪咕视频2」：运行时解析官方免费短视频，下载真实视频分片；前台与原生后台共用 10 分钟缓存，地址被拒后重新获取。无需登录，不经第三方媒体代理；浏览器仅预览此节点，下载需新版 Android App。下载链路复刻官方 App：play API → ddCalcu 签名 → GSLB 302 派发（保持官方给的原始协议与端口，常见 http:8080，仅对 miguvideo.com 官方域放行明文）→ m3u8 → .ts；GSLB 链路失败自动回退全 https 保底。定向流量归属仍以运营商账单为准：计费按「分片落点 IP/SNI 域名」识别，「说明」页诊断行会显示实际落点，可对照运营商免流白名单；流量计入定向还需手机走蜂窝数据、关闭 VPN/代理（开了即全部转通用流量）、套餐确实包含咪咕视频定向（部分套餐排除短视频等特定内容），且运营商统计常有延迟
-- 三指标卡：总使用量（**每次进入页面自动清零**，会话内累计，点数字也可手动清零；可设上限自动停止，上限只对**本次测试**生效）、实时/平均速度、网络带宽峰值（Mbps + 进度条，同样进入页面清零）
-- 传输策略自动适配（`engine.js`）：默认**整包循环下载**（与网页版口径一致）；仅在一次探测确认「服务端真支持 Range 且文件 > 1MiB」后才改 Range 分块，偏移严格取模，**永不发越界请求** —— 越界请求是 416/403 误报与白跑流量的根源
-- 流式计量：边下边计数，慢链路也能实时出速率；请求被中止时已下载字节照样计入用量
-- 抗误判：超时只看「有没有新字节」（连续 20s 零字节才中止该请求）；失败按线程各自退避；越界类 4xx 一律回卷重试；只有「整包请求被真正拒绝且期间零字节」或「45s 完全无数据」才自动停止；长时间零字节会先**自愈重建连接**
-- 平均速度限速（只能限平均、限不了峰值，同原站）；按当前速率的用量预测
-- 保持后台运行（前台服务 + WakeLock + **原生后台泵**）/ 自动运行开关，状态与原站键位一致存 localStorage。切后台/息屏后 WebView 的 JS 会被系统冻结（真机实测：红米 K70 / Android 16 息屏即停，页面未重载但数字停住），此时下载会**交棒给前台服务里的原生线程**继续消耗流量、通知栏实时显示累计用量；回到前台自动取回原生侧字节并重启引擎。服务启动失败会明确提示（不再静默失败），退出应用/划掉最近任务会自动停泵；注意 Android 15 对 dataSync 型前台服务有 6 小时/24 小时累计时长限制
-- 全屏实时速率曲线、首次公告、说明（含当前版本号）、复制/分享测试链接（二维码）、深色模式自适应、防双击缩放、返回键逐层关闭浮层
+- 「咪咕视频2」节点：运行时解析官方免费短视频的真实分片（play API → ddCalcu 签名 → GSLB 302 派发 → m3u8 → .ts，GSLB 失败自动回退全 https），无需登录、不经第三方媒体代理
+- 三指标卡：总使用量（每次进入页面自动清零，可设本次测试生效的上限自动停止）、实时/平均速度、带宽峰值（Mbps + 进度条）
+- 传输策略自动适配（`engine.js`）：默认整包循环下载；仅确认服务端支持 Range 且文件 > 1MiB 后才分块，偏移严格取模，永不发越界请求
+- 流式计量：边下边计数，请求被中止时已下载字节照样计入；抗误判——超时只看「有没有新字节」（连续 20s 零字节才中止），越界类 4xx 回卷重试，长时间零字节先自愈重建连接
+- 平均速度限速（只能限平均、限不了峰值，同原站）与按当前速率的用量预测
+- 后台运行：前台服务 + WakeLock + 原生后台泵；切后台/息屏后 WebView JS 被系统冻结时，下载交棒给原生线程继续，通知栏实时显示用量，回前台自动取回字节并重启引擎
+- 全屏实时速率曲线、测试链接复制/分享（二维码）、深色模式自适应、返回键逐层关闭浮层
 
-## 与网页版的差异
+## 安装 / 出包
 
-| 项 | 网页版 | 本 App |
-|---|---|---|
-| 网络 | 浏览器 fetch，受 CORS/混合内容限制 | CapacitorHttp 走原生 OkHttp，无跨域限制 |
-| 大文件 | 整文件循环下载 | Range 1MiB 分块（206 响应），内存可控 |
-| IP 归属 | EdgeOne 边缘 /geo | ip.sb → ipwho.is → freeipapi → ipapi.co → 1.1.1.1 依次回退，缓存 10 分钟 |
-| 海外节点 | 含 6 个全球海外节点 | 按需求停用（数据留档 `www/js/nodes.js` / `analysis/`）；朝夕光年游戏节点按需移除 |
+- 手机直接下载最新版 APK：https://github.com/change-ouyang/network-speed-app/releases/latest/download/app-debug.apk（debug 侧载包，无需解压）
+- 本地构建：`npm install && npx cap sync android`，然后 `cd android && ./gradlew assembleDebug`（需 Android SDK）
+- 云端：push 到 GitHub main 分支，Actions 测试和构建通过后，自动将 `app-debug.apk` 发布到 [GitHub Releases](https://github.com/change-ouyang/network-speed-app/releases)
+- 版本号：CI 每次构建用 `github.run_number` 自动递增 `versionCode` 与 `versionName`（形如 `1.0.<n>`），`android/app/build.gradle` 里的值只是本地兜底
+- 换图标：替换 `assets/icon.png` 后执行 `npm run assets` 重新生成
 
-> 注意：Android 9+ 默认禁明文传输，自定义节点仅支持 `https`（`http` 会被系统策略拦截）；唯一例外是咪咕官方域 `miguvideo.com`（见上，官方调度链需要 http）。
+## 注意事项
 
-## 构建
+- Android 9+ 默认禁明文传输：自定义节点仅支持 `https`，唯一例外是咪咕官方域 `miguvideo.com`（官方调度链需要 http）
+- Android 15 对 dataSync 型前台服务有 6 小时/24 小时累计时长限制；退出应用/划掉最近任务会自动停泵
+- 咪咕定向流量是否免流以运营商账单为准（按分片落点 IP/SNI 识别，「说明」页显示实际落点）；需手机走蜂窝数据、关闭 VPN/代理、套餐确实包含咪咕视频定向
+- 节点清单整理自互联网公开资源，可能失效，可在 App 内自定义替换
 
-本地：`npm install && npx cap sync android`，然后 `cd android && ./gradlew assembleDebug`（需 Android SDK）。本地预览网页层：`npm run preview`。
-验证：`npm test` 检查动态节点、取消、计量和 Android 启动时的插件注册（需 JDK，通过生命周期桩运行真实 MainActivity）；Android 环境下运行 `./gradlew testDebugUnitTest --tests com.ouyang.speedcheck.MiguSourceResolverTest` 检查原生解析、缓存、失效重取和分片路径。云端打包前会执行这些回归检查。
-云端：push 到 GitHub main 分支，Actions 测试和构建通过后，自动将 `app-debug.apk` 发布到 [GitHub Releases](https://github.com/change-ouyang/network-speed-app/releases)。手机可[直接下载最新版 APK](https://github.com/change-ouyang/network-speed-app/releases/latest/download/app-debug.apk)，无需解压；Actions 中的 `traffic-consumer-apk` ZIP 产物保留用于构建记录。
-版本号：CI 每次构建用 `github.run_number` 自动递增 `versionCode` 与 `versionName`（形如 `1.0.<n>`）；`android/app/build.gradle` 里的值只是本地兜底默认值。
-应用图标：替换 `assets/icon.png` 后执行 `npm run assets` 重新生成各密度图标与启动图。
+---
 
-## 目录
-
-```
-www/            Web 应用（index.html + css/theme.css + js/{engine,nodes,geo,store,ui}.js + vendor/）
-android/        Capacitor 生成工程（cap sync 后入库）
-analysis/       原站逆向记录与节点抓取存档（不入库）
-PLAN.md         立项方案（逆向结论、路线、里程碑、已拍板决策）
-```
-
-测速引擎借鉴 MIT 协议开源项目 [ljxi/NetworkPanel](https://github.com/ljxi/NetworkPanel) 的思路；节点清单整理自互联网公开资源，可能失效，可在 App 内自定义替换。
-
-咪咕动态节点的协议流程参考 [akiralereal/iptv 的咪咕模块](https://github.com/akiralereal/iptv/tree/main/extractors/migu)，本项目用 Java 实现匿名取流、HTTPS 调度与分片选择。固定节目页为 [官网免费短视频](https://www.miguvideo.com/p/vertical/968151936)，只使用服务器允许匿名播放的非 DRM 内容；官网接口或内容下线时会报错，不回退到图片节点。复制/分享该节点得到的是节目页标识，临时签名链接不落盘。
+测速引擎思路源自开源项目 [ljxi/NetworkPanel](https://github.com/ljxi/NetworkPanel)（MIT），原站 270666.xyz 基于其构建。
