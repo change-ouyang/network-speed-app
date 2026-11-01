@@ -274,6 +274,17 @@ public class SpeedForegroundService extends Service {
         return Math.max(0, total - drained);
     }
 
+    /** 领走未入账的增量但**不停泵**（限流切原生通道时，泵就是前台唯一的下载引擎，JS 只做周期清算）。 */
+    public static long drainPump() {
+        long total;
+        long drained;
+        synchronized (PUMP_LOCK) {
+            total = PUMP_BYTES.get();
+            drained = PUMP_DRAINED.getAndSet(total);
+        }
+        return Math.max(0, total - drained);
+    }
+
     /** 登记「允许息屏自动接管」的参数（JS 开始测试且开启保持后台运行时调用，会周期性刷新）。 */
     public static void armPump(String url, int threads, long limitBps, long budgetBytes, long alreadyBytes) {
         armedUrl = url;

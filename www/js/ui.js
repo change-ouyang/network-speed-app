@@ -77,6 +77,12 @@
     currentNode = opt;
     $("selLabel").textContent = opt.label;
     Store.setJSON(Store.K.lastNode, opt);
+    if (nativeLane) {
+      // 原生通道按旧地址在跑：先撤通道清算旧账，再让 JS 从新地址重新开始
+      // （旧账会随切节点重置一并清零）；限流若再次触发会重新进通道。
+      leaveLane();
+      if (engine.running) engine.unpark();
+    }
     // 切换节点 = 重置计量（每个定向包各管各的配额）：立即刷新表显并落盘，不等下一秒的 tick
     if (engine.setUrl(opt.value)) {
       Store.setTotalUse(0);
@@ -210,6 +216,12 @@
       // 撤销授权并停泵；返回的原生字节必须 absorb（否则这批流量丢账）
       window.SpeedNative.disarmPump().then(absorbPumpBytes);
       window.SpeedNative.bgDisable();
+      if (nativeLane) {
+        // 后台开关关掉 = 原生通道被撤：恢复 JS 自己跑
+        nativeLane = false;
+        if (laneTimer) { clearTimeout(laneTimer); laneTimer = null; }
+        engine.unpark();
+      }
     }
   }
 
@@ -242,6 +254,7 @@
     maintainNativePump();   // 自节流（3 秒一次）：清算原生泵字节 + 刷新息屏授权参数
   });
   engine.on("stop", (reason, detail) => {
+    if (nativeLane) leaveLane();   // 停止即撤通道：原生侧最后一批字节照常清算入账
     handedOff = false;   // 任何「真正的停止」（用户手动/自动停止）都要清掉交棒标记，回前台不再自动重启
     let msg = "";
     if (reason === "reachMaxUse") { msg = "已达到用量上限（本次测试），自动停止"; toast(msg); }
@@ -265,12 +278,69 @@
     toast("节点响应缓慢或已限流，正在等待恢复…", 3000);
     $("runStatus").textContent = "节点响应缓慢或已限流，正在等待恢复…";
   });
-  // 引擎检测到 CDN 限速（速率长期低于峰值）会自动重建连接恢复满速，这里只提示一声让用户知道
-  // 刚才的速度骤降不是坏了；次数记录在「说明」的诊断行里，不反复打扰
-  engine.on("throttle", () => {
-    toast("检测到节点限流，已自动重建连接", 3000);
-    $("runStatus").textContent = "检测到节点限流，已自动重建连接";
+  // 引擎检测到 CDN 限速后的两条自愈路径：
+  // ① 首选「原生通道」：息屏实测原生栈（HttpURLConnection）不受此 CDN 限流，亮屏 WebView 栈会被掐——
+  //    把下载整体交给原生泵继续跑，JS 停车只做周期清算，直到用户停止/换节点；
+  // ② 原生不可用（浏览器预览/服务起不来）→ 退回引擎的「静默重建」：停请求几秒让惩罚过期再重连。
+  engine.on("throttle", async (quietMs) => {
+    if (await enterNativeLane()) return;
+    const secs = Math.max(1, Math.round((quietMs || 5000) / 1000));
+    const msg = "检测到节点限流，已停止请求 " + secs + " 秒后自动重连";
+    toast(msg, 4000);
+    $("runStatus").textContent = msg;
   });
+
+  // ---- 原生通道状态与进出 ----
+  let nativeLane = false;
+  let laneEntering = false;
+  let laneTimer = null;
+  const LANE_RETRY_MS = 180000;   // 原生通道跑 3 分钟后回探 WebView 通道：静默这几分钟，限流惩罚大概率已过期
+
+  async function enterNativeLane() {
+    if (nativeLane || laneEntering) return nativeLane;
+    if (!engine.running || !engine.url) return false;
+    if (!window.SpeedNative || !window.SpeedNative.isNative() || !window.SpeedNative.pumpStart) return false;
+    laneEntering = true;
+    try {
+      engine.park();   // 先停 JS 侧请求：切通道的目的就是让被限流的 WebView 栈彻底安静
+      const bg = await window.SpeedNative.bgEnable();   // 前台服务是泵的前提
+      if (!bg || !bg.ok) { engine.unpark(); return false; }
+      const ok = await window.SpeedNative.pumpStart(engine.url, engine.threads, {
+        limitBps: engine.speedLimit,
+        budgetBytes: engine.maxUse > 0 ? Math.max(0, engine.maxUse - engine.sessionBytes) : 0,
+        alreadyBytes: engine.totalBytes
+      });
+      if (!ok) { engine.unpark(); return false; }
+      nativeLane = true;
+      const msg = "检测到节点限流：已切换原生通道继续消耗";
+      $("runStatus").textContent = msg;
+      toast(msg, 3600);
+      if (laneTimer) clearTimeout(laneTimer);
+      laneTimer = setTimeout(() => {
+        laneTimer = null;
+        if (!nativeLane || !engine.running) return;
+        leaveLane().then(() => {
+          if (!engine.running) return;
+          engine.unpark();   // 回探 WebView 通道：能跑满就跑满，再被掐会重新进通道
+          $("runStatus").textContent = "限流应已缓解：切回 WebView 通道";
+        });
+      }, LANE_RETRY_MS);
+      return true;
+    } catch (e) {
+      engine.unpark();
+      return false;
+    } finally {
+      laneEntering = false;
+    }
+  }
+
+  // 离开原生通道：停泵并清算最后一批字节（未开通道时为空操作）
+  async function leaveLane() {
+    if (!nativeLane) return;
+    nativeLane = false;
+    if (laneTimer) { clearTimeout(laneTimer); laneTimer = null; }
+    try { absorbPumpBytes(await window.SpeedNative.pumpStop()); } catch (e) {}
+  }
 
   function refreshPlayUI() {
     $("icPlay").style.display = engine.running ? "none" : "";
@@ -288,6 +358,7 @@
   $("btnPlay").addEventListener("click", () => {
     if (!currentNode) { toast("请先选择测试地址"); return; }
     if (engine.running) {
+      leaveLane();   // 停止时撤掉原生通道（未开通道为空操作），最后一批字节照常入账
       engine.stop();
       refreshPlayUI();
       renderMetrics(engine);
@@ -618,6 +689,7 @@
   // （否则原生泵会在服务里一直消耗流量，用户却已经看不到任何控制入口）
   async function shutdownBeforeExit() {
     try {
+      nativeLane = false;   // 退出前的 disarmPump 会停泵，最后一批字节照常清算
       engine.stop();
       absorbPumpBytes(await window.SpeedNative.disarmPump());   // 停泵 + 撤销息屏接管，字节计入
       pumpOn = false;
@@ -783,6 +855,12 @@
           alreadyBytes: engine.totalBytes
         });
       }
+      if (nativeLane) {
+        // 原生通道进行中：只领增量入账，绝不停泵——泵就是当前唯一的下载引擎
+        const b = await window.SpeedNative.pumpDrain();
+        if (b > 0) { engine.absorb(b); renderMetrics(engine); }
+        return;
+      }
       const st = await window.SpeedNative.pumpStats();
       if (!st.bytes || document.hidden) return;   // 期间又切到后台：交给交棒逻辑处理，别把新起来的泵停掉
       absorbPumpBytes(await window.SpeedNative.pumpStop());   // 停泵并领走字节（含 renderMetrics）
@@ -801,7 +879,8 @@
       // 后台期间冻结「停滞/死亡」判定：否则解冻后过期的 1 秒定时器会把冻结时长误判成节点无响应
       engine.suspend();
       if (engine.running) bgCount++;
-      const handed = await handOffToNative(myEpoch);
+      // 原生通道进行中：泵本来就在跑，无需交棒（息屏自动接管对运行中的泵也是幂等空操作）
+      const handed = nativeLane ? true : await handOffToNative(myEpoch);
       if (myEpoch !== visEpoch) return;   // 期间已切回前台：一切以回前台分支的处理为准
       // 没开「保持后台运行」时系统会冻结 WebView，测速会被暂停 —— 只提醒一次，别反复打扰
       if (!handed && engine.running && !Store.getKeepBg() && !bgHinted) {

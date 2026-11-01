@@ -601,3 +601,22 @@ html[data-theme="dark"] .unit-dd-btn:focus-visible { border-color: var(--accent)
 button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--led-green); outline-offset: 2px;
 }
+
+/* ---------- 长屏收尾（视口高 ≥900px 的全面屏） ----------
+   铭牌紧凑化等内容变化可能让整页略不足一屏（尾部留空洞）：把富余高度均分进
+   各模块间隙（row-gap 6px 是与原布局等值的下限），免责声明贴住机柜底缘。
+   内容超过一屏时 auto 间隙自然归零，与原布局完全一致；不改任何控件尺寸。 */
+@media (min-height: 900px) {
+  body {
+    display: flex; flex-direction: column;
+    min-height: 100vh; min-height: 100svh;
+  }
+  .chassis {
+    flex: 1;
+    display: flex; flex-direction: column;
+    row-gap: 6px;
+  }
+  .chassis > .port-module, .chassis > .meter-module,
+  .chassis > .power-module, .chassis > .asset-plate { margin-top: auto; }
+  .chassis > .disclaimer { margin-top: 0; }
+}

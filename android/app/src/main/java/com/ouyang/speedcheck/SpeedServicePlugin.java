@@ -225,6 +225,18 @@ public class SpeedServicePlugin extends Plugin {
         }
     }
 
+    /** 领走未入账的增量但不停泵：限流切原生通道时，泵就是前台唯一的下载引擎，JS 只做周期清算。 */
+    @PluginMethod
+    public void pumpDrain(PluginCall call) {
+        try {
+            JSObject r = new JSObject();
+            r.put("bytes", String.valueOf(SpeedForegroundService.drainPump()));
+            call.resolve(r);
+        } catch (Throwable t) {
+            call.reject("pumpDrain failed: " + t.getMessage());
+        }
+    }
+
     @PluginMethod
     public void pumpStats(PluginCall call) {
         try {

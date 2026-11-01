@@ -9,8 +9,9 @@
 //      越界/偏移类 4xx 一律回卷重试，绝不终止测试
 //   5. 停滞自愈：长时间零字节先重建 worker，仍无数据才判定节点已死
 //   6. 限流自愈：字节仍在到但速率持续显著低于本轮峰值（CDN 对跑了几分钟的老连接
-//      限速的典型表现，零字节看门狗探测不到）→ 自动重建全部连接恢复满速，
-//      复刻「手动电源开关」的效果，用户无感
+//      限速的典型表现，零字节看门狗探测不到）→ 静默重建：先完全停请求一段时间
+//      让 CDN 的 IP 惩罚过期（真机实测：只重建连接不停顿，请求压力续期惩罚，
+//      永远缓不过来；手动电源开关有效正是因为切换自带几秒空档），再重建连接。
 (function () {
   "use strict";
 
@@ -23,8 +24,10 @@
   const DEAD_MS = 45000;          // 全局零字节持续多久 → 判定节点已死并停止
   const THROTTLE_MIN_PEAK = 2 * 1024 * 1024; // 峰值至少达到 2MB/s 才谈得上「被限流」（排除本身慢的节点）
   const THROTTLE_RATIO = 0.25;    // 实时速度低于本轮峰值的 25% 视为明显劣化
-  const THROTTLE_SUSTAIN_MS = 8000; // 劣化持续多久 → 判定被限流，重建连接自愈
-  const THROTTLE_COOLDOWN = 30000;  // 两次限流自愈的最小间隔（连续无效则逐次拉长，防白耗）
+  const THROTTLE_SUSTAIN_MS = 8000; // 劣化持续多久 → 判定被限流
+  const THROTTLE_COOLDOWN = 30000;  // 两次限流自愈的最小间隔（防抖）
+  const THROTTLE_QUIET_BASE = 5000; // 首次自愈的静默时长：完全零请求让 CDN 惩罚过期
+  const THROTTLE_QUIET_MAX = 60000; // 静默上限（无效则翻倍：5s→10s→20s→40s→60s）
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,6 +69,9 @@
       this._runPeak = 0;         // 本轮测试峰值（限流判定基准，start 清零；区别于跨启动的 peakSpeed）
       this._slowAt = 0;          // 速率低于峰值的起点（0 = 未处于劣化）
       this._throttleRevives = 0; // 因限流自动重建连接的次数（说明页诊断可见）
+      this._quietUntil = 0;      // 限流静默期的截止时刻（期间零请求，停滞判定挂起）
+      this._quietTimer = null;   // 静默期结束后的重建定时器
+      this._parked = false;      // 限流切原生通道：JS worker 全停，字节由 UI 经 absorb() 清算入账
       this._stalled = false;
       this._suspended = false;   // 页面切到后台时为 true：暂停「停滞/死亡」判定
       this._onTick = null;
@@ -210,6 +216,10 @@
       let fails = 0;
       while (this.running && epoch === this._epoch) {
         if (id >= this.threads) return;   // 线程收缩：多余 worker 自行退出
+        if (Date.now() < this._quietUntil) {   // 限流静默期：一个请求都不发（setThreads 等路径可能补建 worker）
+          await sleep(500);
+          continue;
+        }
         // 平均速度限速：按超出比例插入间隔（限平均、限不了峰值）
         if (this.speedLimit > 0 && this.avgSpeed > this.speedLimit) {
           const wait = Math.min(4000, (this.avgSpeed / this.speedLimit - 1) * this.threads * 200);
@@ -323,6 +333,7 @@
     // 停滞自愈：中止在途请求并重建全部 worker（保留已探明的传输策略）
     // 公开方法：从后台回到前台时由 UI 主动调用，立即恢复冻结/断流的 worker，不必等看门狗
     revive() {
+      if (this._parked || Date.now() < this._quietUntil) return;   // 原生通道/限流静默期内不打断
       this._lastReviveAt = Date.now();
       this._revives++;
       this._epoch++;               // 先换代：旧 worker 的异常会被静默吞掉，不误报错误
@@ -335,29 +346,109 @@
       this._spawn(this._epoch);
     }
 
-    // 限流自愈判定：CDN 常对持续满速跑了几分钟的老连接做单连接限速——速率从几十 MB/s
+    // 限流自愈判定：CDN 常对持续满速跑了几分钟的老连接做 IP 级限速惩罚——速率从几十 MB/s
     // 掉到几百 KB/s，但字节仍在到，「零字节停滞」看门狗不会触发，用户只能手动电源开关
-    // 重连恢复。这里自动复刻这个动作：实时速度持续显著低于本轮峰值 → 重建全部连接。
+    // 重连恢复。这里自动复刻且更稳：静默期完全零请求让惩罚过期，再重建全部连接。
     _checkThrottle(now) {
-      if (!this.running || this._suspended || this.speedLimit > 0) return; // 设了限速时速度本来就低，不判定
+      if (!this.running || this._suspended || this.speedLimit > 0 || this._parked) return; // 设了限速时速度本来就低；原生通道期间无 JS 请求，都不判定
+      if (now < this._quietUntil) return;   // 静默期内没有数据本来就是预期，不判定
       const s = this.speed;
       if (s > this._runPeak) this._runPeak = s;
       if (s <= 0) return;   // 完全断流交给零字节看门狗，不在这里凑热闹
       if (this._runPeak >= THROTTLE_MIN_PEAK && s < this._runPeak * THROTTLE_RATIO) {
         if (!this._slowAt) this._slowAt = now;
-        const cooldown = THROTTLE_COOLDOWN * (1 + Math.min(3, this._throttleRevives)); // 30/60/90/120s 逐次拉长
-        if (now - this._slowAt >= THROTTLE_SUSTAIN_MS && now - this._lastReviveAt >= cooldown) {
-          this._throttleRevives++;
-          this._slowAt = 0;        // 重建后重新计时，给新连接留爬坡时间
-          if (this._onThrottle) this._onThrottle();
-          this.revive();
+        if (now - this._slowAt >= THROTTLE_SUSTAIN_MS && now - this._lastReviveAt >= THROTTLE_COOLDOWN) {
+          this._quietRebuild();
         }
       } else {
         // 未处于明显劣化：连续劣化计时作废（速度抖回劣化线以上就重新数，避免「累计劣化」误触发）；
-        // 恢复到峰值半数以上才算真恢复，限流计数与冷却一并归零
+        // 恢复到峰值半数以上才算真恢复，限流计数一并归零
         this._slowAt = 0;
         if (s >= this._runPeak * THROTTLE_RATIO * 2) this._throttleRevives = 0;
       }
+    }
+
+    // 静默时长随失败次数翻倍：5s→10s→20s→40s→60s（封顶）。单测可覆盖以缩短等待。
+    _quietMs() {
+      return Math.min(THROTTLE_QUIET_MAX, THROTTLE_QUIET_BASE * Math.pow(2, Math.min(4, this._throttleRevives - 1)));
+    }
+
+    _quietRebuild() {
+      this._throttleRevives++;
+      this._revives++;
+      this._slowAt = 0;
+      const quiet = this._quietMs();
+      this._quiesce(quiet);
+      if (this._onThrottle) this._onThrottle(quiet);
+    }
+
+    // 完全停止请求一段时间后重建全部连接：epoch 换代让 worker 静默退出、在途请求中止，
+    // 定时器到点后如仍在运行再重新 spawn。静默期间停滞/死亡判定挂起（_tick 与 revive 都让路）。
+    _quiesce(ms) {
+      this._epoch++;
+      if (this._quietTimer) { clearTimeout(this._quietTimer); this._quietTimer = null; }
+      for (const c of this._controllers) {
+        try { c.abort(); } catch (e) {}
+      }
+      this._controllers.clear();
+      this._workers = [];
+      this._probeInFlight = false;
+      this._seq = 0;
+      this._quietUntil = Date.now() + ms;
+      this._lastProgressAt = this._quietUntil;   // 静默期不计入「无数据」时长，看门狗不会误判
+      this._stalled = false;
+      const epoch = this._epoch;
+      this._quietTimer = setTimeout(() => {
+        this._quietTimer = null;
+        if (!this.running || epoch !== this._epoch) return;
+        this._lastReviveAt = Date.now();
+        this._lastProgressAt = Date.now();
+        this._window = [{ t: Date.now(), b: this.totalBytes }];
+        this._spawn(this._epoch);
+      }, ms);
+    }
+
+    // 停掉 JS 侧全部请求但保持「运行中」状态与统计定时器（限流切原生通道用）：
+    // 下载整体交给原生泵，字节由 UI 周期经 absorb() 清算入账；unpark() 恢复 JS 下载。
+    park() {
+      this._parked = true;
+      this._epoch++;
+      if (this._quietTimer) { clearTimeout(this._quietTimer); this._quietTimer = null; }
+      for (const c of this._controllers) {
+        try { c.abort(); } catch (e) {}
+      }
+      this._controllers.clear();
+      this._workers = [];
+      this._probeInFlight = false;
+      this._seq = 0;
+      this._stalled = false;
+      this._quietUntil = 0;
+    }
+
+    // 恢复 JS 侧下载（离开原生通道）：重置速率基准后重建 worker
+    unpark() {
+      this._parked = false;
+      this._lastReviveAt = Date.now();
+      this._lastProgressAt = Date.now();
+      this._lastProgressBytes = this.totalBytes;
+      this._window = [{ t: Date.now(), b: this.totalBytes }];
+      this._slowAt = 0;
+      this._stalled = false;
+      if (this.running) this._spawn(this._epoch);
+    }
+
+    // 原生通道清算：字节入账并作为速率窗口样本（JS worker 已 parked，不产生自己的请求）。
+    // 预算到点走统一的 _finish 出口（UI 的 onStop 里会停泵清算）。
+    absorb(bytes) {
+      if (!this.running || !(bytes > 0)) return;
+      this.totalBytes += bytes;
+      this.sessionBytes += bytes;
+      const now = Date.now();
+      this._lastProgressBytes = this.totalBytes;
+      this._lastProgressAt = now;
+      this._window.push({ t: now, b: this.totalBytes });
+      while (this._window.length > 1 && now - this._window[0].t > 3000) this._window.shift();
+      if (this.maxUse > 0 && this.sessionBytes >= this.maxUse) this._finish("reachMaxUse");
     }
 
     _tick() {
@@ -370,7 +461,7 @@
           this._stalled = false;
           if (this._onRecover) this._onRecover();
         }
-      } else if (this.running && !this._suspended) {
+      } else if (this.running && !this._suspended && !this._parked && now >= this._quietUntil) {
         // 注意：页面在后台被冻结期间，系统不跑定时器；解冻后那些「过期」的定时器会立刻执行。
         // 若不挂起判定，它们会把「我被冻结的时间」当成「节点无响应的时间」→ 误判节点已死并停止测试。
         // 因此切后台一律 suspend()，回前台由 resume() 重置基准并重建 worker。
@@ -437,6 +528,9 @@
       this._runPeak = 0;         // 新一轮测试重新学峰值，旧节点/旧线路的峰值不作数
       this._slowAt = 0;
       this._throttleRevives = 0;
+      this._parked = false;
+      this._quietUntil = 0;
+      if (this._quietTimer) { clearTimeout(this._quietTimer); this._quietTimer = null; }
       this._timer = setInterval(() => this._tick(), TICK);
       this._spawn(this._epoch);
     }
@@ -495,6 +589,9 @@
       this.running = false;
       this._epoch++;               // 让所有在途 worker 立即失效
       if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      if (this._quietTimer) { clearTimeout(this._quietTimer); this._quietTimer = null; }
+      this._quietUntil = 0;
+      this._parked = false;
       // 中止在途请求：暂停即停流量，不再白跑完当前分块
       for (const c of this._controllers) {
         try { c.abort(); } catch (e) {}

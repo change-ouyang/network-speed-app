@@ -131,6 +131,17 @@
         return isFinite(n) && n > 0 ? n : 0;
       } catch (e) { return 0; }
     },
+    // 领走未入账的增量但不停泵（限流切原生通道时由 UI 周期清算）；浏览器预览返回 0
+    async pumpDrain() {
+      if (!isNative()) return 0;
+      const p = plugin("SpeedService");
+      if (!p || !p.pumpDrain) return 0;
+      try {
+        const r = await p.pumpDrain();
+        const n = r && r.bytes != null ? Number(r.bytes) : 0;
+        return isFinite(n) && n > 0 ? n : 0;
+      } catch (e) { return 0; }
+    },
     // 查询后台泵状态 {running, bytes}（浏览器预览返回未运行）
     async pumpStats() {
       if (!isNative()) return { running: false, bytes: 0 };
